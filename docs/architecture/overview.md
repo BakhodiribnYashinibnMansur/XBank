@@ -4,7 +4,9 @@
 - **Go 1.22+** + **GoFiber v2** (fasthttp)
 - **pgx v5** + **PgBouncer** (transaction pool mode)
 - **PostgreSQL 17** (write primary + read replica, partitioning, RLS)
-- **Redis 7** (session, cache, rate limit, pub/sub, message queue)
+- **Redis 7** (session, cache, rate limit, pub/sub)
+- **Apache Kafka** (message queue, async processing) + **Protobuf** (message serialization)
+- **Confluent Schema Registry** (Protobuf schema versioning, backward compatibility)
 - **Prometheus + Grafana + Loki** (monitoring)
 - **HashiCorp Vault** (key management — JWT, Card KEK, KYC KEK private keys)
 - **Docker + docker-compose**
@@ -52,7 +54,7 @@ XBank/
 │   │   └── exchange/                  # ExchangeRate
 │   ├── application/                   # CQRS Command + Query handlers
 │   │   └── crypto/                    # EncryptionKey, SigningKey, KeyRotation
-│   ├── infrastructure/                # DB, Redis, Auth, Crypto, Vault, Queue
+│   ├── infrastructure/                # DB, Redis, Kafka, Auth, Crypto, Vault
 │   └── interfaces/http/              # Fiber handlers, middleware, DTO
 ├── web/static/                        # Test UI
 ├── docs/                              # Documentation

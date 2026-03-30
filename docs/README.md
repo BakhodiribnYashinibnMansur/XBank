@@ -4,7 +4,7 @@
 - [Umumiy ko'rinish](architecture/overview.md) — Tech stack, bounded contexts, loyiha strukturasi
 - [Event Sourcing](architecture/event-sourcing.md) — Account event sourcing, snapshots, CQRS
 - [Saga Pattern](architecture/saga-pattern.md) — Transfer saga, compensations
-- [Message Queue](architecture/message-queue.md) — Redis Streams, DLQ, async processing
+- [Message Queue](architecture/message-queue.md) — Apache Kafka, Protobuf, DLQ, async processing
 
 ## Ishlash Flowlari
 - [Umumiy tizim flow](architecture/system-flow.md) — Register, Login, Transfer to'liq diagramma
@@ -31,7 +31,7 @@
 
 ## Security
 - [Security Overview](security/overview.md) — OWASP, encryption, hashing, rate limiting
-- [Encryption & PKI](security/encryption.md) — ES256, Hybrid/Envelope encryption, key rotation, Vault
+- [Encryption & PKI](security/encryption.md) — E2EE (ECIES), ES256, Envelope encryption, key rotation, Vault
 <!-- TODO: security/api-standards.md — Response format, pagination, Swagger (hali yaratilmagan) -->
 - [Xalqaro Standartlar](security/compliance.md) — PCI DSS, ISO 27001, SOC 2, GDPR
 

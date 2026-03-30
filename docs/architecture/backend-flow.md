@@ -67,7 +67,8 @@ Client Request
 ┌─────────────────────────────────────────────┐
 │         INFRASTRUCTURE LAYER                 │
 │  - PostgreSQL (pgx, event store, snapshots)  │
-│  - Redis (session, cache, queue, pub/sub)    │
+│  - Redis (session, cache, pub/sub)            │
+│  - Kafka (async message queue, Protobuf)     │
 │  - Crypto (AES, HMAC, bcrypt)                │
 │  - JWT (ES256)                               │
 │  - Event Bus (sync + async)                  │
@@ -126,7 +127,7 @@ InitiateTransferHandler:
     └── 11. Publish events (after commit)
             ├── → Notification service (SSE push)
             ├── → Audit log
-            └── → Redis Streams (async)
+            └── → Kafka (async, Protobuf)
 ```
 
 ## Account Load Flow (Event Sourcing)
@@ -158,16 +159,16 @@ Domain Event (after commit)
     ├── Sync: EventBus.Publish()
     │       └── NotificationHandler → SSE push
     │
-    └── Async: Redis Streams
+    └── Async: Kafka Producer (Protobuf serialize)
             │
-            ├── xbank:transfers:created
-            │       ├── Consumer: FraudAnalysis (background deep scan)
-            │       └── Consumer: StatementGenerator
+            ├── xbank.transfers.created (key=account_id)
+            │       ├── Consumer Group: fraud-group → FraudAnalysis
+            │       └── Consumer Group: notification-group → StatementGenerator
             │
-            └── xbank:transfers:failed
-                    └── Consumer: AlertService
+            └── xbank.transfers.failed (key=transfer_id)
+                    └── Consumer Group: alert-group → AlertService
                             │
-                            └── Retry 3x → fail → DLQ
+                            └── Retry 3x → fail → xbank.dlq topic
                                                     │
                                                     └── Admin manual review
 ```

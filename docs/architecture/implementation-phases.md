@@ -29,7 +29,7 @@
 18. AES encryption + tokenization + hold/capture/release
 
 ## Faza 6: Beneficiary + Exchange + Notifications + Queue
-19. Beneficiary, Exchange, Audit, SSE, Redis Streams queue
+19. Beneficiary, Exchange, Audit, SSE, Kafka queue (Protobuf), Schema Registry
 20. Reconciliation (daily)
 
 ## Faza 7: Monitoring
