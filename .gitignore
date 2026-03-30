@@ -1,0 +1,6 @@
+# Faqat docs/ papka git da saqlanadi
+# Qolgan barcha fayllar ignore qilinadi
+*
+!docs/
+!docs/**
+!.gitignore
