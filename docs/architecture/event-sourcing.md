@@ -1,8 +1,8 @@
 # Event Sourcing
 
-## Konsept
+## Concept
 ```
-Oddiy yondashuv:          Event Sourcing:
+Traditional approach:          Event Sourcing:
 ┌─────────┐               ┌─────────────────────────┐
 │ balance  │               │ Event 1: +1000 (deposit) │
 │  = 500   │               │ Event 2: -200 (transfer) │
@@ -11,34 +11,34 @@ Oddiy yondashuv:          Event Sourcing:
                           └─────────────────────────┘
 ```
 
-- Har bir o'zgarish event sifatida saqlanadi
-- Hech qachon UPDATE/DELETE — faqat APPEND
-- Istalgan vaqtga "qaytib" holat ko'rish mumkin
-- Audit uchun ideal — regulyator talab qiladi
+- Every change is stored as an event
+- Never UPDATE/DELETE — only APPEND
+- You can "go back" and view the state at any point in time
+- Ideal for audit — required by regulators
 
-## Event Turlari
+## Event Types
 
-<!-- Barcha Account aggregate event turlari -->
+<!-- All Account aggregate event types -->
 
-| Event | Tavsif | Ma'lumot (event_data) |
+| Event | Description | Data (event_data) |
 |---|---|---|
-| `AccountOpenedEvent` | Yangi hisob ochildi | `{user_id, currency, account_number}` |
-| `AccountCreditedEvent` | Hisobga pul tushdi | `{amount, reference, source}` |
-| `AccountDebitedEvent` | Hisobdan pul yechildi | `{amount, reference, destination}` |
-| `HoldPlacedEvent` | Pul bloklandi (karta auth) | `{amount, reference, expires_at}` |
-| `HoldCapturedEvent` | Hold tasdiqlandi (to'lov) | `{reference, captured_amount, original_amount}` |
-| `HoldReleasedEvent` | Hold bekor qilindi | `{reference, released_amount}` |
-| `AccountFrozenEvent` | Hisob muzlatildi | `{reason, frozen_by}` |
-| `AccountUnfrozenEvent` | Hisob qayta faollashdi | `{reason, unfrozen_by}` |
-| `AccountClosedEvent` | Hisob yopildi | `{reason, closed_by}` |
+| `AccountOpenedEvent` | New account opened | `{user_id, currency, account_number}` |
+| `AccountCreditedEvent` | Funds deposited to account | `{amount, reference, source}` |
+| `AccountDebitedEvent` | Funds withdrawn from account | `{amount, reference, destination}` |
+| `HoldPlacedEvent` | Funds held (card auth) | `{amount, reference, expires_at}` |
+| `HoldCapturedEvent` | Hold confirmed (payment) | `{reference, captured_amount, original_amount}` |
+| `HoldReleasedEvent` | Hold cancelled | `{reference, released_amount}` |
+| `AccountFrozenEvent` | Account frozen | `{reason, frozen_by}` |
+| `AccountUnfrozenEvent` | Account reactivated | `{reason, unfrozen_by}` |
+| `AccountClosedEvent` | Account closed | `{reason, closed_by}` |
 
-### Event Strukturasi (Go)
+### Event Structure (Go)
 ```go
-// Har bir event quyidagi interfeys'ni implement qiladi
+// Every event implements the following interface
 type DomainEvent interface {
     EventType() string      // "AccountCreditedEvent"
     AggregateID() uuid.UUID // account UUID
-    Version() int           // monoton o'suvchi raqam
+    Version() int           // monotonically increasing number
     OccurredAt() time.Time
 }
 ```
@@ -52,110 +52,110 @@ CREATE TABLE event_store (
     event_type     VARCHAR(100) NOT NULL,      -- 'AccountCreditedEvent'
     event_data     JSONB NOT NULL,             -- event payload
     metadata       JSONB,                      -- correlation_id, user_id, ip, device_id
-    version        INTEGER NOT NULL,           -- aggregate versiyasi (1, 2, 3, ...)
+    version        INTEGER NOT NULL,           -- aggregate version (1, 2, 3, ...)
     created_at     TIMESTAMPTZ DEFAULT NOW(),
-    UNIQUE(aggregate_id, version)              -- bitta aggregate uchun version takrorlanmaydi
+    UNIQUE(aggregate_id, version)              -- version cannot repeat for a single aggregate
 ) PARTITION BY RANGE (created_at);
 
--- Indekslar
+-- Indexes
 CREATE INDEX idx_event_store_aggregate ON event_store (aggregate_id, version);
 CREATE INDEX idx_event_store_type ON event_store (event_type, created_at);
 ```
 
 ## Event Versioning (Schema Evolution)
 
-<!-- Event strukturasi vaqt o'tishi bilan o'zgarishi mumkin.
-     Masalan, AccountCreditedEvent ga yangi field qo'shilishi kerak.
-     Eski eventlarni buzmasdan yangi field qo'shish strategiyasi: -->
+<!-- Event structure may change over time.
+     For example, a new field may need to be added to AccountCreditedEvent.
+     Strategy for adding new fields without breaking old events: -->
 
 ```
-Strategiya: Upcasting (o'qish vaqtida eski formatni yangi formatga o'tkazish)
+Strategy: Upcasting (converting old format to new format at read time)
 
 v1: { "amount": 100000 }
-v2: { "amount": 100000, "source": "TRANSFER" }    ← yangi field qo'shildi
+v2: { "amount": 100000, "source": "TRANSFER" }    ← new field added
 
-Qoidalar:
-1. Event data ga yangi field qo'shish — OK (default qiymat bilan)
-2. Mavjud field ni o'chirish — MUMKIN EMAS
-3. Field nomini o'zgartirish — MUMKIN EMAS
-4. Yangi event turi yaratish — OK (eski event turi saqlanadi)
+Rules:
+1. Adding a new field to event data — OK (with default value)
+2. Removing an existing field — NOT ALLOWED
+3. Renaming a field — NOT ALLOWED
+4. Creating a new event type — OK (old event type is preserved)
 
-Go da:
+In Go:
   func (e *AccountCreditedEvent) Upcast(data map[string]any) {
       if _, ok := data["source"]; !ok {
-          data["source"] = "UNKNOWN"  // eski eventlar uchun default
+          data["source"] = "UNKNOWN"  // default for old events
       }
   }
 ```
 
 ## Snapshot (Performance)
 
-Har 100 eventdan keyin joriy holatni cache:
+Cache the current state after every 100 events:
 ```sql
 CREATE TABLE snapshots (
     aggregate_id   UUID NOT NULL,
     aggregate_type VARCHAR(50) NOT NULL,
-    version        INTEGER NOT NULL,           -- shu versiongacha bo'lgan eventlar
-    state          JSONB NOT NULL,             -- aggregate ning joriy holati
-    checksum       VARCHAR(64),                -- SHA-256 (integrity tekshiruv)
+    version        INTEGER NOT NULL,           -- events up to this version
+    state          JSONB NOT NULL,             -- current state of the aggregate
+    checksum       VARCHAR(64),                -- SHA-256 (integrity check)
     created_at     TIMESTAMPTZ DEFAULT NOW(),
     PRIMARY KEY (aggregate_id, version)
 );
 ```
 
-### Snapshot Validatsiya
-<!-- Reconciliation vaqtida snapshot to'g'riligini tekshirish -->
+### Snapshot Validation
+<!-- Checking snapshot correctness during reconciliation -->
 ```
-1. Snapshot yuklash (version=N, state=S1)
-2. Barcha eventlarni 1 dan N gacha replay → state S2
+1. Load snapshot (version=N, state=S1)
+2. Replay all events from 1 to N → state S2
 3. S1 == S2? → OK
-4. S1 != S2? → Snapshot buzilgan, qayta yaratish + ALERT
-   - Buzilgan snapshot o'chiriladi
-   - Barcha eventlardan qayta build qilinadi
-   - Yangi snapshot saqlanadi
+4. S1 != S2? → Snapshot corrupted, recreate + ALERT
+   - Corrupted snapshot is deleted
+   - Rebuilt from all events
+   - New snapshot is saved
 ```
 
-## Account Yuklash Strategiyasi
+## Account Loading Strategy
 ```
 AccountRepository.FindByID(id):
   │
-  ├── 1. Oxirgi snapshot olish (version=100)
-  │       → snapshot topilmasa, version=0 dan boshlash
+  ├── 1. Get latest snapshot (version=100)
+  │       → if no snapshot found, start from version=0
   │
-  ├── 2. Undan keyingi eventlar (101, 102, ...)
-  │       → eventlar topilmasa, snapshot holati = joriy holat
+  ├── 2. Get subsequent events (101, 102, ...)
+  │       → if no events found, snapshot state = current state
   │
-  ├── 3. Snapshot + replay = joriy holat
+  ├── 3. Snapshot + replay = current state
   │
-  └── 4. Agar yangi version % 100 == 0 → yangi snapshot saqlash
+  └── 4. If new version % 100 == 0 → save new snapshot
 ```
 
-## Temporal Query (Vaqtga qarab holat ko'rish)
+## Temporal Query (Viewing state at a point in time)
 
-<!-- Regulyator yoki audit uchun: "2026-01-15 dagi balans qancha edi?" -->
+<!-- For regulator or audit: "What was the balance on 2026-01-15?" -->
 ```
 AccountRepository.FindByIDAtTime(id, targetTime):
-  1. targetTime gacha bo'lgan oxirgi snapshot olish
-  2. Snapshot dan targetTime gacha bo'lgan eventlarni replay
-  3. Natija = o'sha vaqtdagi aniq holat
+  1. Get the latest snapshot before targetTime
+  2. Replay events from snapshot to targetTime
+  3. Result = exact state at that time
 
-Foydalanish holatlari:
-  - Audit so'rovi: "Shu sanadagi balans?"
-  - Dispute: "Transfer vaqtidagi holat?"
-  - Regulyator hisoboti: "Oy oxiridagi balans?"
+Use cases:
+  - Audit query: "Balance on this date?"
+  - Dispute: "State at the time of transfer?"
+  - Regulator report: "Balance at end of month?"
 ```
 
 ## CQRS Projections
 
 Event store → denormalized read model (materialized views):
 
-| Projection | Maqsad | Yangilanish |
+| Projection | Purpose | Updated |
 |---|---|---|
-| `AccountSummaryView` | Hisob holati: balance, status, oxirgi tx | Har bir account event da |
-| `TransactionHistoryView` | Paginated tranzaksiya tarixi | Credit/Debit/Transfer event da |
-| `DashboardView` | Barcha hisoblar + umumiy balance | Har bir balance o'zgarishda |
+| `AccountSummaryView` | Account state: balance, status, last tx | On every account event |
+| `TransactionHistoryView` | Paginated transaction history | On Credit/Debit/Transfer event |
+| `DashboardView` | All accounts + total balance | On every balance change |
 
-### Projection Yangilanish Mexanizmi
+### Projection Update Mechanism
 ```
 Event Store INSERT (after commit)
     │
@@ -166,14 +166,14 @@ Event Store INSERT (after commit)
     │               └── DashboardProjection.Update(event)
     │
     └── Async: Redis Streams (background)
-            └── Consumer: ProjectionRebuilder (agar projection buzilsa)
+            └── Consumer: ProjectionRebuilder (if projection is corrupted)
 ```
 
 ### Projection Rebuild
-<!-- Agar projection noto'g'ri bo'lsa yoki yangi projection qo'shilsa -->
+<!-- If projection is incorrect or a new projection is added -->
 ```
-1. Yangi projection jadval yaratish
-2. event_store dan BARCHA eventlarni ketma-ket o'qish
-3. Har bir event ni projection handler ga berish
-4. Eski projection bilan almashtirish (atomic swap)
+1. Create new projection table
+2. Read ALL events sequentially from event_store
+3. Pass each event to the projection handler
+4. Replace old projection (atomic swap)
 ```

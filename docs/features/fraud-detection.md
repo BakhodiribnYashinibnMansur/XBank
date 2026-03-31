@@ -2,57 +2,57 @@
 
 ## Risk Scoring
 
-<!-- Risk score — 0 dan 100 gacha bo'lgan ball.
-     5 ta omil vaznli (weighted) qo'shiladi.
-     Vaznlar quyidagicha taqsimlangan: -->
+<!-- Risk score — a score from 0 to 100.
+     5 factors are added with weights (weighted).
+     The weights are distributed as follows: -->
 
 ```
 score = w1*velocity + w2*amount + w3*device + w4*behavior + w5*time
 
-Vaznlar (weights):
-  w1 = 0.30  (velocity — tezlik, eng muhim)
-  w2 = 0.25  (amount — summa)
-  w3 = 0.20  (device — qurilma)
-  w4 = 0.15  (behavior — xatti-harakat)
-  w5 = 0.10  (time — vaqt)
+Weights:
+  w1 = 0.30  (velocity — speed, most important)
+  w2 = 0.25  (amount — sum)
+  w3 = 0.20  (device — device)
+  w4 = 0.15  (behavior — behavior)
+  w5 = 0.10  (time — time)
 
-Natija darajalari:
-  LOW (0-30):     → auto approve (avtomatik tasdiqlash)
-  MEDIUM (30-70): → require OTP/2FA (qo'shimcha tasdiqlash)
-  HIGH (70-100):  → block + manual review (bloklash + admin ko'rib chiqish)
+Result levels:
+  LOW (0-30):     → auto approve (automatic approval)
+  MEDIUM (30-70): → require OTP/2FA (additional verification)
+  HIGH (70-100):  → block + manual review (block + admin review)
 ```
 
-### Scoring Misol
+### Scoring Example
 ```
-Foydalanuvchi: yangi qurilmadan, tunda 3:00 da, katta summa transfer
+User: from a new device, at 3:00 AM, large amount transfer
 
-  velocity:  20/100  (1 ta transfer/soat — normal)     × 0.30 = 6
-  amount:    80/100  ($9,000 — yuqori)                  × 0.25 = 20
-  device:    90/100  (yangi, noma'lum qurilma)           × 0.20 = 18
-  behavior:  40/100  (oddiy summa pattern)               × 0.15 = 6
-  time:      70/100  (tunda 3:00 — g'ayrioddiy)         × 0.10 = 7
+  velocity:  20/100  (1 transfer/hour — normal)              × 0.30 = 6
+  amount:    80/100  ($9,000 — high)                          × 0.25 = 20
+  device:    90/100  (new, unknown device)                    × 0.20 = 18
+  behavior:  40/100  (normal amount pattern)                  × 0.15 = 6
+  time:      70/100  (3:00 AM — unusual)                      × 0.10 = 7
 
-  Jami score = 6 + 20 + 18 + 6 + 7 = 57 → MEDIUM → 2FA so'raladi
+  Total score = 6 + 20 + 18 + 6 + 7 = 57 → MEDIUM → 2FA requested
 ```
 
-## Real-time Tekshiruvlar
+## Real-time Checks
 
-### Velocity Checks (Tezlik tekshiruvlari)
+### Velocity Checks
 
-| Tekshiruv | Threshold | Natija |
+| Check | Threshold | Result |
 |---|---|---|
-| Transfer soni / soat | 5+ | FLAG |
-| Transfer soni / kun | 20+ | BLOCK |
-| Kunlik summa | > daily_limit | BLOCK |
-| Yangi qurilmadan katta summa | > $1,000 | HOLD + 2FA |
-| Round amount pattern | 3+ ketma-ket (1000, 2000, 3000) | FLAG |
-| Bir xil beneficiary ga tez-tez | 5+ / kun | FLAG |
+| Transfers per hour | 5+ | FLAG |
+| Transfers per day | 20+ | BLOCK |
+| Daily amount | > daily_limit | BLOCK |
+| Large amount from new device | > $1,000 | HOLD + 2FA |
+| Round amount pattern | 3+ consecutive (1000, 2000, 3000) | FLAG |
+| Frequent transfers to same beneficiary | 5+ / day | FLAG |
 
-### Behavioral Analysis (Xatti-harakat tahlili)
-- **Vaqt anomaliya:** Odatiy bo'lmagan vaqt (masalan, foydalanuvchi doim kunduzi, lekin tunda transfer)
-- **Geo anomaliya:** Odatiy bo'lmagan IP geo-lokatsiya (masalan, O'zbekiston → Braziliya)
-- **Summa anomaliya:** Odatiy bo'lmagan summa pattern (masalan, doim 100K, birdan 9M)
-- **Beneficiary anomaliya:** Yangi beneficiary + 24 soat ichida katta summa
+### Behavioral Analysis
+- **Time anomaly:** Unusual time (e.g., user always active during the day, but transfers at night)
+- **Geo anomaly:** Unusual IP geo-location (e.g., Uzbekistan → Brazil)
+- **Amount anomaly:** Unusual amount pattern (e.g., always 100K, suddenly 9M)
+- **Beneficiary anomaly:** New beneficiary + large amount within 24 hours
 
 ### Device Fingerprinting
 ```sql
@@ -62,21 +62,21 @@ CREATE TABLE device_fingerprints (
     device_id   VARCHAR(64) NOT NULL,           -- SHA-256(navigator + screen + timezone + ...)
     ip_address  INET,
     user_agent  TEXT,
-    is_trusted  BOOLEAN DEFAULT FALSE,           -- foydalanuvchi tasdiqlagan qurilma
+    is_trusted  BOOLEAN DEFAULT FALSE,           -- device confirmed by user
     first_seen  TIMESTAMPTZ DEFAULT NOW(),
     last_seen   TIMESTAMPTZ DEFAULT NOW(),
-    login_count INTEGER DEFAULT 0                -- necha marta kirgan
+    login_count INTEGER DEFAULT 0                -- number of logins
 );
 
 CREATE INDEX idx_device_user ON device_fingerprints (user_id, is_trusted);
 CREATE INDEX idx_device_id ON device_fingerprints (device_id);
 ```
 
-**Device qoidalari:**
-- Yangi device → notification + 2FA mandatory (birinchi marta)
-- Foydalanuvchi qurilmani "ishonchli" deb belgilashi mumkin → keyingi safar 2FA shart emas
-- Multiple accounts = 1 device → FLAG (bitta qurilmada bir nechta hisob)
-- 1 account = 10+ devices → ALERT (juda ko'p qurilma)
+**Device rules:**
+- New device → notification + 2FA mandatory (first time)
+- User can mark device as "trusted" → 2FA not required next time
+- Multiple accounts = 1 device → FLAG (multiple accounts on one device)
+- 1 account = 10+ devices → ALERT (too many devices)
 
 ## FraudCheck Model
 ```go
@@ -86,53 +86,53 @@ type FraudCheck struct {
     UserID      uuid.UUID
     RiskScore   int          // 0-100
     RiskLevel   RiskLevel    // LOW, MEDIUM, HIGH
-    Checks      []FraudFlag  // qaysi tekshiruvlar flag berdi
-    DeviceMatch bool         // qurilma mos keldi yoki yo'q
+    Checks      []FraudFlag  // which checks triggered a flag
+    DeviceMatch bool         // whether the device matched or not
     Decision    string       // APPROVE, REQUIRE_2FA, BLOCK
-    ReviewedBy  *uuid.UUID   // admin ko'rib chiqqan bo'lsa
+    ReviewedBy  *uuid.UUID   // if reviewed by admin
     ReviewedAt  *time.Time
-    Notes       string       // admin izohi
+    Notes       string       // admin notes
 }
 ```
 
 ## Fraud Case Management
 
-<!-- HIGH risk yoki BLOCK qilingan transfer lar admin panel da ko'rib chiqiladi -->
+<!-- HIGH risk or BLOCKed transfers are reviewed in the admin panel -->
 ```
 Admin Panel Flow:
-  1. Fraud alert keldi → admin panel da ko'rinadi
-  2. Admin transfer tafsilotlarini ko'radi:
-     - Foydalanuvchi tarixi
-     - Device ma'lumoti
-     - Risk score taqsimoti (qaysi omil yuqori ball berdi)
-     - O'xshash fraud case lar
-  3. Admin qaror qabul qiladi:
-     a. "Tasdiqlash" → transfer davom etadi (risk_level pastga tushadi)
-     b. "Rad etish" → transfer bekor qilinadi
-     c. "Account muzlatish" → account FROZEN, barcha transfer lar BLOCK
-  4. Audit log ga qayd qilinadi
+  1. Fraud alert received → appears in admin panel
+  2. Admin views transfer details:
+     - User history
+     - Device information
+     - Risk score breakdown (which factor gave a high score)
+     - Similar fraud cases
+  3. Admin makes a decision:
+     a. "Approve" → transfer proceeds (risk_level lowered)
+     b. "Reject" → transfer is cancelled
+     c. "Freeze account" → account FROZEN, all transfers BLOCKed
+  4. Recorded in audit log
 ```
 
 ## False Positive Handling
 
-<!-- Fraud tizimi ba'zan to'g'ri transfer ni noto'g'ri bloklashi mumkin -->
+<!-- The fraud system may sometimes incorrectly block a legitimate transfer -->
 ```
-Foydalanuvchi uchun:
-  1. Transfer bloklandi → "Transfer tekshirilmoqda" xabari
-  2. Foydalanuvchi bank ga murojaat qilishi mumkin
-  3. Admin transfer ni tekshirib, tasdiqlashi mumkin
+For the user:
+  1. Transfer blocked → "Transfer is being reviewed" message
+  2. User can contact the bank
+  3. Admin can review and approve the transfer
 
-Tizim o'rganishi:
-  - Admin tasdiqlagan transfer lar → future scoring ga ta'sir
-  - Tasdiqlangan qurilma → device risk score pasayadi
-  - Tasdiqlangan beneficiary → beneficiary risk pasayadi
+System learning:
+  - Admin-approved transfers → affect future scoring
+  - Confirmed device → device risk score decreases
+  - Confirmed beneficiary → beneficiary risk decreases
 ```
 
 ## API Endpoints
 
-| Method | Endpoint | Middleware | Tavsif |
+| Method | Endpoint | Middleware | Description |
 |---|---|---|---|
-| GET | `/admin/fraud/reviews` | Admin+IPWhitelist | Ko'rib chiqish kerak bo'lgan fraud case lar |
-| POST | `/admin/fraud/reviews/{id}/approve` | Admin+IPWhitelist | Fraud case ni tasdiqlash |
-| POST | `/admin/fraud/reviews/{id}/reject` | Admin+IPWhitelist | Fraud case ni rad etish |
-| GET | `/admin/fraud/stats` | Admin+IPWhitelist | Fraud statistikasi |
+| GET | `/admin/fraud/reviews` | Admin+IPWhitelist | Fraud cases pending review |
+| POST | `/admin/fraud/reviews/{id}/approve` | Admin+IPWhitelist | Approve a fraud case |
+| POST | `/admin/fraud/reviews/{id}/reject` | Admin+IPWhitelist | Reject a fraud case |
+| GET | `/admin/fraud/stats` | Admin+IPWhitelist | Fraud statistics |

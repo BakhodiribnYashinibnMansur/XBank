@@ -2,40 +2,40 @@
 
 ## ACID
 ```
-Atomicity    — Transfer: debit A + credit B = bitta atomic operation
+Atomicity    — Transfer: debit A + credit B = one atomic operation
 Consistency  — CHECK(balance >= 0), FK, domain invariants
-Isolation    — SERIALIZABLE muhim transfers uchun
+Isolation    — SERIALIZABLE for critical transfers
 Durability   — WAL + fsync + replication
 ```
 
 ## Isolation Levels
 ```sql
-READ UNCOMMITTED   — HECH QACHON (dirty reads!)
-READ COMMITTED     — Default, ko'p operatsiyalar uchun
+READ UNCOMMITTED   — NEVER (dirty reads!)
+READ COMMITTED     — Default, for most operations
 REPEATABLE READ    — Statement, reconciliation
-SERIALIZABLE       — Transfer (eng xavfsiz)
+SERIALIZABLE       — Transfer (safest)
 ```
 
-### Qayerda qaysi:
-| Operatsiya | Isolation | Sabab |
+### Where to use which:
+| Operation | Isolation | Reason |
 |---|---|---|
-| Transfer | SERIALIZABLE | Write skew, phantom read himoya |
-| Balance check + Debit | SERIALIZABLE | Concurrent debit himoya |
+| Transfer | SERIALIZABLE | Write skew, phantom read protection |
+| Balance check + Debit | SERIALIZABLE | Concurrent debit protection |
 | Statement | REPEATABLE READ | Consistent snapshot |
-| Oddiy CRUD | READ COMMITTED | Default |
+| Simple CRUD | READ COMMITTED | Default |
 
-## 6 ta Concurrency Muammo
+## 6 Concurrency Problems
 
-| Muammo | Tavsif | Himoya |
+| Problem | Description | Protection |
 |---|---|---|
-| Dirty Read | Uncommitted o'qish | READ COMMITTED |
-| Dirty Write | Uncommitted overwrite | PG barcha darajalar |
-| Non-repeatable Read | Qayta o'qishda farq | REPEATABLE READ |
-| Phantom Read | Yangi qatorlar | SERIALIZABLE |
-| Lost Update | Concurrent update yo'qolish | Optimistic/Pessimistic lock |
+| Dirty Read | Reading uncommitted data | READ COMMITTED |
+| Dirty Write | Uncommitted overwrite | PG all levels |
+| Non-repeatable Read | Different result on re-read | REPEATABLE READ |
+| Phantom Read | New rows appear | SERIALIZABLE |
+| Lost Update | Concurrent update lost | Optimistic/Pessimistic lock |
 | Write Skew | Concurrent read → invalid write | SERIALIZABLE |
 
-## Locking Strategiyalari
+## Locking Strategies
 
 ### Optimistic Locking (version)
 ```sql
@@ -47,7 +47,7 @@ WHERE id=$2 AND version=$3;
 ### Pessimistic Lock (FOR UPDATE)
 ```sql
 SELECT * FROM accounts WHERE id=$1 FOR UPDATE;
--- boshqa tranzaksiyalar kutadi
+-- other transactions wait
 ```
 
 ### FOR UPDATE SKIP LOCKED (parallel workers)
@@ -59,23 +59,23 @@ ORDER BY created_at LIMIT 10 FOR UPDATE SKIP LOCKED;
 ### Advisory Locks
 ```sql
 SELECT pg_advisory_xact_lock(hashtext('account:' || $1::text));
--- Tranzaksiya tugagach avtomatik unlock
+-- Automatically unlocked when transaction ends
 ```
 
-### Lock Timeout Konfiguratsiyasi
-<!-- Lock kutish vaqtini cheklash — deadlock oldini olish va performance uchun -->
+### Lock Timeout Configuration
+<!-- Limit lock wait time — to prevent deadlocks and improve performance -->
 ```sql
--- Session level (connection uchun)
-SET lock_timeout = '5s';           -- 5 sekund kutib, keyin xato beradi
-SET statement_timeout = '30s';     -- query 30 sekund dan oshsa bekor qilish
+-- Session level (per connection)
+SET lock_timeout = '5s';           -- waits 5 seconds, then raises error
+SET statement_timeout = '30s';     -- cancels query if it exceeds 30 seconds
 
--- Transaction level (bitta tranzaksiya uchun)
+-- Transaction level (per single transaction)
 SET LOCAL lock_timeout = '3s';
 SET LOCAL statement_timeout = '10s';
 
--- Go da:
--- pgx config orqali default qiymatlar o'rnatiladi
--- Har bir use case uchun alohida timeout belgilash mumkin
+-- In Go:
+-- Default values are set via pgx config
+-- Separate timeouts can be configured for each use case
 ```
 
 ## Retry Strategy
@@ -86,7 +86,7 @@ SET LOCAL statement_timeout = '10s';
 ```
 
 ## Error Classification
-| PG Code | Xato | Retry? |
+| PG Code | Error | Retry? |
 |---|---|---|
 | 40001 | serialization_failure | Yes |
 | 40P01 | deadlock_detected | Yes |

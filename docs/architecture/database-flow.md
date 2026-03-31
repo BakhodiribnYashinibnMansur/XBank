@@ -1,4 +1,4 @@
-# PostgreSQL Ishlash Flow
+# PostgreSQL Operation Flow
 
 ## Connection Flow
 
@@ -21,12 +21,12 @@ BEGIN ISOLATION LEVEL SERIALIZABLE;
 -- 2. Set RLS context
 SET LOCAL app.current_user_id = 'user-uuid';
 
--- 3. Lock accounts (UUID tartibida — deadlock prevention)
+-- 3. Lock accounts (in UUID order — deadlock prevention)
 SELECT * FROM accounts WHERE id = 'smaller-uuid' FOR UPDATE;
 SELECT * FROM accounts WHERE id = 'larger-uuid' FOR UPDATE;
 
 -- 4. Balance check
--- (SERIALIZABLE = write skew himoya)
+-- (SERIALIZABLE = write skew protection)
 
 -- 5. Debit source (optimistic lock)
 UPDATE accounts
@@ -75,7 +75,7 @@ COMMIT;
 ## Hold Flow (Card Authorization)
 
 ```sql
--- Hold qo'yish
+-- Place hold
 BEGIN;
 SELECT * FROM accounts WHERE id = $1 FOR UPDATE;
 UPDATE accounts SET
@@ -91,7 +91,7 @@ BEGIN;
 UPDATE accounts SET
     balance_minor = balance_minor - 30000,
     hold_amount = hold_amount - 50000,
-    available_balance = available_balance + 20000, -- qoldiq qaytarildi
+    available_balance = available_balance + 20000, -- remainder returned
     version = version + 1
 WHERE id = $1;
 COMMIT;
@@ -119,7 +119,7 @@ INSERT INTO ledger_entries (..., created_at='2026-03-15')
   │
   └── PostgreSQL auto-routes → ledger_entries_2026_03 (March partition)
 
--- pg_cron har oy 25-da:
+-- pg_cron on the 25th of each month:
 SELECT create_next_month_partitions();
   → ledger_entries_2026_04
   → audit_log_2026_04
@@ -138,8 +138,8 @@ Daily (2:00 AM):
   pg_basebackup ──→ /backups/daily/2026-03-30.tar.gz
 
 Recovery:
-  RPO < 1 daqiqa (WAL stream)
-  RTO < 15 daqiqa (restore + replay WAL)
+  RPO < 1 minute (WAL stream)
+  RTO < 15 minutes (restore + replay WAL)
 ```
 
 ## Reconciliation Flow (Daily 3:00 AM)

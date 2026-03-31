@@ -1,4 +1,4 @@
-# Beneficiaries — Transfer Qiluvchilar
+# Beneficiaries — Transfer Recipients
 
 ## Model
 ```go
@@ -6,81 +6,81 @@ type Beneficiary struct {
     AggregateRoot
     UserID          uuid.UUID
     Name            string
-    AccountNumber   string           // internal yoki IBAN
+    AccountNumber   string           // internal or IBAN
     BankName        string
     BankCode        string           // BIC/SWIFT
     Currency        Currency
     BeneficiaryType BeneficiaryType  // INTERNAL, EXTERNAL, INTERNATIONAL
     IsVerified      bool
-    IsActive        bool             // soft delete uchun (false = o'chirilgan)
+    IsActive        bool             // for soft delete (false = deleted)
 }
 ```
 
-## Beneficiary Turlari
+## Beneficiary Types
 
-| Tur | Tavsif | Validatsiya |
+| Type | Description | Validation |
 |---|---|---|
-| `INTERNAL` | XBank ichidagi hisob | Account number mavjudligini tekshirish |
-| `EXTERNAL` | Boshqa mahalliy bank | Bank code (MFO) + account number format |
-| `INTERNATIONAL` | Xalqaro o'tkazma | IBAN format + SWIFT/BIC code validatsiya |
+| `INTERNAL` | Account within XBank | Check account number existence |
+| `EXTERNAL` | Other local bank | Bank code (MFO) + account number format |
+| `INTERNATIONAL` | International transfer | IBAN format + SWIFT/BIC code validation |
 
-## Validatsiya Qoidalari
+## Validation Rules
 
-<!-- Beneficiary qo'shishda account raqami va bank kodi tekshiriladi -->
+<!-- When adding a beneficiary, the account number and bank code are validated -->
 ```
-IBAN validatsiya (INTERNATIONAL uchun):
-  1. Uzunlik tekshirish (davlatga qarab, masalan: DE=22, GB=22, UZ=23)
-  2. Faqat raqam va katta harflar
-  3. Mod97 algoritmi (ISO 13616) — IBAN checksum
-  4. Davlat kodi (dastlabki 2 harf) mavjudligi
+IBAN validation (for INTERNATIONAL):
+  1. Length check (depends on country, e.g.: DE=22, GB=22, UZ=23)
+  2. Only digits and uppercase letters
+  3. Mod97 algorithm (ISO 13616) — IBAN checksum
+  4. Country code (first 2 letters) existence
 
-SWIFT/BIC validatsiya:
-  1. Uzunlik: 8 yoki 11 belgi
+SWIFT/BIC validation:
+  1. Length: 8 or 11 characters
   2. Format: AAAA BB CC (DDD) — bank, country, location, (branch)
 
-Internal account validatsiya:
-  1. XBank ichida account mavjudligini tekshirish
-  2. Account ACTIVE statusda bo'lishi kerak
-  3. O'z hisobiga beneficiary qo'shib bo'lmaydi
+Internal account validation:
+  1. Check account existence within XBank
+  2. Account must be in ACTIVE status
+  3. Cannot add own account as beneficiary
 ```
 
-## Limitlar
+## Limits
 
 ```
-Har bir foydalanuvchi uchun:
-  - Maksimum 50 ta beneficiary (faol)
-  - Bir kunda maksimum 5 ta yangi beneficiary qo'shish
-  - Yangi beneficiary + katta summa transfer (24 soat ichida) = fraud flag
+Per user:
+  - Maximum 50 beneficiaries (active)
+  - Maximum 5 new beneficiaries per day
+  - New beneficiary + large amount transfer (within 24 hours) = fraud flag
 ```
 
 ## Soft Delete
 
-<!-- Moliyaviy ma'lumotlar HECH QACHON hard delete qilinmaydi.
-     O'chirilgan beneficiary is_active=false bo'ladi. -->
+<!-- Financial data is NEVER hard deleted.
+     Deleted beneficiaries have is_active=false. -->
 ```
-O'chirish: is_active = false, deleted_at = NOW()
-Natija:
-  - Beneficiary ro'yxatda ko'rinmaydi
-  - Lekin eski transfer tarixida havolasi saqlanadi
-  - Audit log da DELETE qayd qilinadi
+Deletion: is_active = false, deleted_at = NOW()
+Result:
+  - Beneficiary does not appear in the list
+  - But the reference is preserved in old transfer history
+  - DELETE is recorded in the audit log
 ```
 
 ## API
 
-| Method | Endpoint | Middleware | Tavsif |
+| Method | Endpoint | Middleware | Description |
 |---|---|---|---|
-| POST | `/api/v1/beneficiaries` | Session | Yangi beneficiary qo'shish |
-| GET | `/api/v1/beneficiaries` | Session | Foydalanuvchi beneficiary lari |
-| GET | `/api/v1/beneficiaries/{id}` | Session | Bitta beneficiary ma'lumoti |
-| PUT | `/api/v1/beneficiaries/{id}` | Session | Beneficiary yangilash (name, bank ma'lumotlari) |
+| POST | `/api/v1/beneficiaries` | Session | Add new beneficiary |
+| GET | `/api/v1/beneficiaries` | Session | User's beneficiaries |
+| GET | `/api/v1/beneficiaries/{id}` | Session | Single beneficiary details |
+| PUT | `/api/v1/beneficiaries/{id}` | Session | Update beneficiary (name, bank details) |
 | DELETE | `/api/v1/beneficiaries/{id}` | Session | Soft delete (is_active=false) |
 
 ## Fraud Integration
 
-<!-- Yangi beneficiary bilan bog'liq fraud tekshiruvlari -->
+<!-- Fraud checks related to new beneficiaries -->
 ```
-Fraud qoidalari:
-  - Yangi beneficiary + 24 soat ichida katta summa transfer = MEDIUM risk
-  - Bir kunda 3+ yangi beneficiary = FLAG
-  - Yangi qurilmadan yangi beneficiary = FLAG + 2FA mandatory
+Fraud rules:
+  - New beneficiary + large amount transfer within 24 hours = MEDIUM risk
+  - 3+ new beneficiaries per day = FLAG
+  - New beneficiary from new device = FLAG + 2FA mandatory
 ```

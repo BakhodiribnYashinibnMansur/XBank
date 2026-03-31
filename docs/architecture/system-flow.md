@@ -1,6 +1,6 @@
-# XBank — Umumiy Ishlash Flow
+# XBank — General Operation Flow
 
-## Tizim Arxitekturasi
+## System Architecture
 
 ```
                     ┌──────────────┐
@@ -45,7 +45,7 @@
                    └──────────┘
 ```
 
-## Foydalanuvchi Ro'yxatdan O'tish Flow
+## User Registration Flow
 
 ```
 User                    Frontend               Backend                 PostgreSQL          Redis
@@ -82,7 +82,7 @@ User                    Frontend               Backend                 Redis
  │ ←── Dashboard ─────── │                      │                       │
 ```
 
-## Transfer To'liq Flow
+## Transfer Full Flow
 
 ```
 User                Frontend            Backend                    PostgreSQL         Redis
@@ -115,7 +115,7 @@ User                Frontend            Backend                    PostgreSQL   
  │                     │ ←── 201 Created    │                          │                 │
  │                     │                   │                          │                 │
  │ ←── SSE: "Transfer  │ ←── SSE event ─── │ ←── Redis Pub/Sub ─────────────────────── │
- │     muvaffaqiyatli!" │                   │                          │                 │
+ │     successful!"    │                   │                          │                 │
 ```
 
 ## Monitoring Flow
@@ -131,7 +131,7 @@ Request ──→ Fiber ──→ Prometheus Middleware ──→ /metrics endpo
                                     │                │                │
                               Request Rate     Error Rate      Latency P99
                                     │                │                │
-                              Alert Rules ──→ Notification (threshold oshsa)
+                              Alert Rules ──→ Notification (if threshold exceeded)
 ```
 
 ## Nightly Jobs Flow

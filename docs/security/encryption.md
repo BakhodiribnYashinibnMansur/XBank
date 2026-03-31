@@ -1,32 +1,32 @@
 # Encryption & PKI Strategy
 
-## Umumiy ko'rinish
+## Overview
 
-XBank barcha sensitive ma'lumotlarni himoya qilish uchun **asymmetric (public/private key)** va **symmetric (AES)** encryption kombinatsiyasini ishlatadi. Kalitlar ierarxiyasi (Key Hierarchy) orqali boshqariladi.
+XBank uses a combination of **asymmetric (public/private key)** and **symmetric (AES)** encryption to protect all sensitive data. Keys are managed through a Key Hierarchy.
 
-## Encryption standarti
+## Encryption Standard
 
-| Ma'lumot | Algorithm | Izoh |
+| Data | Algorithm | Notes |
 |---|---|---|
-| Karta raqami (PAN) | **E2EE: ECIES (P-256) + AES-256-GCM** | Client da encrypt, faqat Vault/HSM da decrypt |
-| Card PIN | **E2EE: ECIES + ISO 9564 PIN Block** | Faqat HSM decrypt qiladi, server ko'rmaydi |
-| Card CVV | **E2EE: ECIES (P-256)** | Faqat verify uchun, HECH QACHON saqlanmaydi |
-| KYC hujjatlar | **E2EE: ECIES + Envelope (AES-256-GCM)** | Client da encrypt, Vault decrypt, DEK per-document |
-| KYC hujjat raqami | **E2EE: ECIES (P-256)** | Client da encrypt, Vault da decrypt |
-| Parol | **bcrypt** (cost=12) | Hash, deshifrlash mumkin emas |
-| PIN | **bcrypt** (cost=12) | Hash, deshifrlash mumkin emas |
-| CVV | **bcrypt** (cost=12) | Hash, HECH QACHON plain text |
+| Card number (PAN) | **E2EE: ECIES (P-256) + AES-256-GCM** | Encrypted on client, decrypted only in Vault/HSM |
+| Card PIN | **E2EE: ECIES + ISO 9564 PIN Block** | Only HSM decrypts, server never sees it |
+| Card CVV | **E2EE: ECIES (P-256)** | Only for verification, NEVER stored |
+| KYC documents | **E2EE: ECIES + Envelope (AES-256-GCM)** | Encrypted on client, Vault decrypts, DEK per-document |
+| KYC document number | **E2EE: ECIES (P-256)** | Encrypted on client, decrypted in Vault |
+| Password | **bcrypt** (cost=12) | Hash, cannot be decrypted |
+| PIN | **bcrypt** (cost=12) | Hash, cannot be decrypted |
+| CVV | **bcrypt** (cost=12) | Hash, NEVER plain text |
 | Refresh token | **SHA-256** | One-way hash |
 | Device fingerprint | **SHA-256** | One-way hash |
-| Fayl integrity | **SHA-256** | Checksum |
+| File integrity | **SHA-256** | Checksum |
 | JWT signing | **ES256** (ECDSA P-256) | Asymmetric, key rotation |
 | Transfer signing | **ECDSA P-256** (per-user) | Client private key, server public key |
 | Auth challenge | **ECDSA P-256** | Challenge-response |
-| API trafik | **TLS 1.3** | Transport encryption (E2EE ustiga) |
+| API traffic | **TLS 1.3** | Transport encryption (on top of E2EE) |
 | DB connection | **SSL verify-full** | PostgreSQL SSL |
-| Servislar arasi | **mTLS** | Kelajakda microservice uchun |
+| Inter-service | **mTLS** | For future microservice use |
 
-## Key Hierarchy (Kalit ierarxiyasi)
+## Key Hierarchy
 
 ```
                 ┌──────────────────────────┐
@@ -48,28 +48,28 @@ XBank barcha sensitive ma'lumotlarni himoya qilish uchun **asymmetric (public/pr
     │          │    │  AES-256)│    │ AES-256) │
     └──────────┘    └──────────┘    └──────────┘
 
-KEK = Key Encryption Key (kalitni shifrlash kaliti)
-DEK = Data Encryption Key (ma'lumotni shifrlash kaliti)
+KEK = Key Encryption Key (key that encrypts other keys)
+DEK = Data Encryption Key (key that encrypts data)
 ```
 
-### Qoidalar
-- **KEK** faqat HSM/Vault da saqlanadi — DB da HECH QACHON
-- **DEK** AES-256-GCM bilan ma'lumotni shifrlaydi
-- **DEK** o'zi KEK bilan shifrlangan holda DB da saqlanadi
-- KEK rotate bo'lganda faqat DEK lar qayta shifrlanadi (ma'lumotga tegmaydi)
+### Rules
+- **KEK** is stored only in HSM/Vault — NEVER in DB
+- **DEK** encrypts data with AES-256-GCM
+- **DEK** itself is stored encrypted with KEK in the DB
+- When KEK is rotated, only DEKs are re-encrypted (data is not touched)
 
 ## JWT Signing (ES256)
 
-### Nima uchun RS256 emas, ES256?
+### Why ES256 instead of RS256?
 | | RS256 | ES256 |
 |---|---|---|
 | Algorithm | RSA 2048-bit | ECDSA P-256 |
 | Key size | 2048-bit | 256-bit |
 | Signature size | 256 byte | 64 byte |
-| Sign tezligi | Sekin | **10x tez** |
-| Verify tezligi | Tez | Tez |
-| NIST approved | Ha | **Ha** |
-| JWT hajmi | Katta | **Kichik** |
+| Sign speed | Slow | **10x faster** |
+| Verify speed | Fast | Fast |
+| NIST approved | Yes | **Yes** |
+| JWT size | Large | **Small** |
 
 ### JWT Header
 ```json
@@ -110,33 +110,33 @@ GET /.well-known/jwks.json
 
 ### Key Rotation Flow
 ```
-1. Yangi key pair generatsiya (jwt_2026_q2)
-2. Yangi key → ACTIVE, eski key → ROTATE_OUT
-3. Yangi tokenlar → yangi key bilan sign
-4. Eski tokenlar → eski key bilan verify (30 kun)
-5. 30 kundan keyin eski key → RETIRED
+1. Generate new key pair (jwt_2026_q2)
+2. New key → ACTIVE, old key → ROTATE_OUT
+3. New tokens → signed with new key
+4. Old tokens → verified with old key (30 days)
+5. After 30 days, old key → RETIRED
 ```
 
 ## Transfer Signing (ECDSA per-user)
 
-### Nima uchun HMAC emas, ECDSA?
+### Why ECDSA instead of HMAC?
 ```
 HMAC (symmetric):
-  Client va Server BIR XIL secret ni biladi
-  Server buzilsa → barcha userlar compromise
+  Client and Server know the SAME secret
+  If Server is compromised → all users are compromised
 
 ECDSA (asymmetric):
-  Client → Private key bilan IMZOLAYDI
-  Server → Public key bilan TEKSHIRADI
-  Server HECH QACHON private key ni ko'rmaydi!
+  Client → SIGNS with private key
+  Server → VERIFIES with public key
+  Server NEVER sees the private key!
 ```
 
 ### Client Key Registration Flow
 
 ```
-┌─ 1. Client keypair generatsiya qiladi (LOCAL, server ko'rmaydi) ─────┐
+┌─ 1. Client generates keypair (LOCAL, server never sees it) ────────┐
 │                                                                        │
-│   // Mobile/Web da                                                     │
+│   // On Mobile/Web                                                     │
 │   private_key, public_key = ECDSA_Generate(P-256)                     │
 │                                                                        │
 │   private_key → Secure storage:                                       │
@@ -144,18 +144,18 @@ ECDSA (asymmetric):
 │                 Android: StrongBox / TEE (hardware)                   │
 │                 Web: SubtleCrypto (non-exportable CryptoKey)          │
 │                                                                        │
-│   public_key → server ga yuboriladi                                   │
-│                (ochiq, xavfsiz — bilsa ham foydasiz)                  │
+│   public_key → sent to server                                         │
+│                (public, safe — useless even if known)                  │
 └────────────────────────────────────────────────────────────────────────┘
 
-┌─ 2. Authenticated session orqali public key yuborish ────────────────┐
+┌─ 2. Send public key via authenticated session ──────────────────────┐
 │                                                                        │
-│   ⚠️ Faqat LOGIN qilgan user yuborishi mumkin (JWT token kerak)       │
+│   Only a LOGGED IN user can send it (JWT token required)              │
 │                                                                        │
 │   POST /api/v1/auth/signing-keys                                      │
 │   Headers:                                                             │
-│     Authorization: Bearer <JWT>          ← kim yuborayotgani ma'lum   │
-│     X-Device-Fingerprint: "abc123..."    ← qaysi qurilma             │
+│     Authorization: Bearer <JWT>          ← identifies who is sending  │
+│     X-Device-Fingerprint: "abc123..."    ← which device               │
 │   Body:                                                                │
 │   {                                                                    │
 │     "public_key": "-----BEGIN PUBLIC KEY-----\nMFkw...",              │
@@ -164,12 +164,12 @@ ECDSA (asymmetric):
 │   }                                                                    │
 └────────────────────────────────────────────────────────────────────────┘
 
-┌─ 3. Server public key ni saqlaydi ───────────────────────────────────┐
+┌─ 3. Server stores the public key ────────────────────────────────────┐
 │                                                                        │
 │   Server:                                                              │
-│     1. JWT dan user_id ni oladi (kim?)                                │
-│     2. Device fingerprint tekshiradi (qaysi qurilma?)                 │
-│     3. public_key ni DB ga saqlaydi:                                  │
+│     1. Gets user_id from JWT (who?)                                   │
+│     2. Verifies device fingerprint (which device?)                    │
+│     3. Stores public_key in DB:                                       │
 │                                                                        │
 │        user_signing_keys:                                              │
 │        ┌──────────────┬──────────┬────────────┬────────┐              │
@@ -182,13 +182,13 @@ ECDSA (asymmetric):
 │     4. Response: { "key_id": "key-uuid", "status": "ACTIVE" }        │
 └────────────────────────────────────────────────────────────────────────┘
 
-┌─ 4. Keyinchalik: transfer imzolash ─────────────────────────────────┐
+┌─ 4. Later: signing a transfer ──────────────────────────────────────┐
 │                                                                        │
 │   Client:                                                              │
 │     payload = "idemp_key|from|to|amount|currency|timestamp"           │
 │     signature = ECDSA_Sign(private_key, SHA256(payload))              │
 │                            ^^^^^^^^^^^                                │
-│                            faqat client biladi                        │
+│                            only the client knows it                   │
 │                                                                        │
 │   POST /api/v1/transfers                                              │
 │   Headers:                                                             │
@@ -197,30 +197,31 @@ ECDSA (asymmetric):
 │     X-Signing-Key-ID: "key-uuid"                                     │
 │                                                                        │
 │   Server:                                                              │
-│     public_key = DB dan olish (key-uuid bo'yicha)                    │
+│     public_key = fetched from DB (by key-uuid)                        │
 │     valid = ECDSA_Verify(public_key, SHA256(payload), signature)     │
-│     valid == true  → transfer davom etadi                             │
+│     valid == true  → transfer proceeds                                │
 │     valid == false → 403 Forbidden                                    │
 └────────────────────────────────────────────────────────────────────────┘
 ```
 
-### Nima Uchun Bu Ishonchli?
+### Why Is This Trustworthy?
 
 ```
-Savol: MITM public key ni almashtirsa-chi?
+Question: What if MITM replaces the public key?
 
-Javob: MUMKIN EMAS, chunki:
+Answer: IMPOSSIBLE, because:
 
-  1. TLS 1.3 — transport himoyalangan, MITM o'rtada turolmaydi
-  2. JWT — faqat login qilgan user yuborishi mumkin
-  3. Device fingerprint — faqat shu qurilmadan
-  4. 2FA — yangi qurilma uchun 2FA talab qilinadi
+  1. TLS 1.3 — transport is protected, MITM cannot intercept
+  2. JWT — only a logged-in user can send it
+  3. Device fingerprint — only from this device
+  4. 2FA — 2FA is required for new devices
 
-  Hatto TLS buzilsa:
-    MITM o'zining public key ni yubordi → server saqladi
-    Lekin MITM client ning private key ni BILMAYDI
-    → MITM o'zi transfer imzolay olmaydi (o'zining private key bilan
-      imzolasa, server da saqlangan public key bilan MATCH bo'lmaydi)
+  Even if TLS were broken:
+    MITM sent their own public key → server stored it
+    But MITM does NOT KNOW the client's private key
+    → MITM cannot sign transfers themselves (if they sign
+      with their own private key, it won't MATCH the
+      public key stored on the server)
 ```
 
 ### Go Implementation
@@ -232,7 +233,7 @@ import (
     "crypto/sha256"
 )
 
-// Server: signature tekshirish
+// Server: verify signature
 func VerifyTransferSignature(publicKey *ecdsa.PublicKey, payload []byte, sig []byte) bool {
     hash := sha256.Sum256(payload)
     return ecdsa.VerifyASN1(publicKey, hash[:], sig)
@@ -243,96 +244,96 @@ func VerifyTransferSignature(publicKey *ecdsa.PublicKey, payload []byte, sig []b
 
 ### Flow
 ```
-SHIFRLASH (client tomonida — mobile/web):
-  1. Server public key olish: GET /api/v1/crypto/public-key
-  2. ECIES shifrlash (client da):
+ENCRYPTION (client-side — mobile/web):
+  1. Get server public key: GET /api/v1/crypto/public-key
+  2. ECIES encryption (on client):
      ephemeral_key  = ECDH_Generate(P-256)
      shared_secret  = ECDH(ephemeral_private, server_public)
      derived_key    = HKDF-SHA256(shared_secret, salt, "xbank-e2ee-v1")
      encrypted_pan  = AES-256-GCM(card_number, derived_key, nonce)
   3. POST /api/v1/cards { encrypted_pan: { ciphertext, ephemeral_pub, nonce, salt } }
 
-SERVER (plaintext ko'rmaydi):
-  1. encrypted_pan ni Vault/HSM ga proxy qiladi
+SERVER (never sees plaintext):
+  1. Proxies encrypted_pan to Vault/HSM
   2. Vault: ECIES decrypt → plaintext PAN
   3. Vault: AES-256-GCM(PAN, card_DEK) → re-encrypt for storage
-  4. DB ga saqlash: re-encrypted_pan + encrypted_dek + nonce + key_id
-  5. pan_last_four va pan_hash (SHA-256) hisoblash — Vault ichida
+  4. Store in DB: re-encrypted_pan + encrypted_dek + nonce + key_id
+  5. Compute pan_last_four and pan_hash (SHA-256) — inside Vault
 
-DESHIFRLASH (karta o'qish):
+DECRYPTION (reading a card):
   1. Vault: encrypted_dek → decrypt → DEK
   2. Vault: AES_Decrypt(encrypted_pan, DEK, nonce) → card_number
-  3. Plaintext faqat Vault ichida — server memory ga CHIQMAYDI
+  3. Plaintext only inside Vault — NEVER leaves to server memory
 ```
 
 ### DB Schema
 ```sql
--- cards jadvalidagi encryption ustunlari:
+-- Encryption columns in the cards table:
 encrypted_pan       BYTEA NOT NULL,        -- AES-256-GCM(pan, DEK)
 encrypted_dek       BYTEA NOT NULL,        -- RSA(DEK, KEK_public)
 encryption_nonce    BYTEA NOT NULL,        -- AES GCM nonce (12 byte)
-encryption_key_id   VARCHAR(50) NOT NULL,  -- qaysi KEK ishlatilgan
-pan_last_four       CHAR(4) NOT NULL,      -- masking uchun
-pan_hash            VARCHAR(64) NOT NULL,  -- SHA-256 (qidiruv uchun)
+encryption_key_id   VARCHAR(50) NOT NULL,  -- which KEK was used
+pan_last_four       CHAR(4) NOT NULL,      -- for masking
+pan_hash            VARCHAR(64) NOT NULL,  -- SHA-256 (for search)
 ```
 
-### KEK Rotate bo'lganda
+### When KEK Is Rotated
 ```
-1. Yangi KEK pair generatsiya (card_kek_v4)
-2. Barcha mavjud kartalar uchun:
-   a. Eski KEK bilan DEK ni decrypt
-   b. Yangi KEK bilan DEK ni re-encrypt (re-wrap)
-   c. encrypted_dek va encryption_key_id yangilash
-3. Karta ma'lumotining O'ZI qayta shifrlanmaydi — faqat DEK
-4. Eski KEK → ROTATE_OUT (30 kun), keyin RETIRED
+1. Generate new KEK pair (card_kek_v4)
+2. For all existing cards:
+   a. Decrypt DEK with old KEK
+   b. Re-encrypt DEK with new KEK (re-wrap)
+   c. Update encrypted_dek and encryption_key_id
+3. The card data ITSELF is not re-encrypted — only the DEK
+4. Old KEK → ROTATE_OUT (30 days), then RETIRED
 ```
 
 ## KYC Document Encryption (E2EE: ECIES + Envelope)
 
 ### Flow
 ```
-SHIFRLASH (client tomonida — mobile/web):
-  1. Server public key olish: GET /api/v1/crypto/public-key
-  2. Client ECIES bilan hujjatni shifrlaydi:
+ENCRYPTION (client-side — mobile/web):
+  1. Get server public key: GET /api/v1/crypto/public-key
+  2. Client encrypts the document with ECIES:
      ephemeral_key = ECDH_Generate(P-256)
      shared_secret = ECDH(ephemeral_private, server_public)
      derived_key   = HKDF-SHA256(shared_secret, salt, "xbank-e2ee-v1")
      encrypted_doc = AES-256-GCM(document, derived_key, nonce)
   3. POST /api/v1/kyc/documents { encrypted_document: { ciphertext, ephemeral_pub, nonce, salt } }
 
-SERVER (plaintext ko'rmaydi):
-  1. encrypted_doc ni Vault ga proxy
+SERVER (never sees plaintext):
+  1. Proxies encrypted_doc to Vault
   2. Vault: ECIES decrypt → plaintext document
-  3. Vault: Random DEK generatsiya (har bir hujjat uchun yangi)
+  3. Vault: Generate random DEK (new for each document)
   4. Vault: AES-256-GCM(document, DEK) → re-encrypted_doc
   5. Vault: RSA_Encrypt(DEK, kyc_KEK) → encrypted_dek
   6. re-encrypted_doc → S3/MinIO, encrypted_dek → DB
-  7. file_hash = SHA-256(document) — Vault ichida hisoblash
+  7. file_hash = SHA-256(document) — computed inside Vault
 
-DESHIFRLASH (hujjat ko'rish):
+DECRYPTION (viewing a document):
   1. Vault: encrypted_dek → RSA_Decrypt(kyc_KEK_private) → DEK
-  2. S3 dan: re-encrypted_doc → Vault ga yuborish
+  2. From S3: re-encrypted_doc → sent to Vault
   3. Vault: AES_Decrypt(re_encrypted_doc, DEK, nonce) → document
-  4. Vault: SHA-256(document) == file_hash tekshirish (integrity)
-  5. Plaintext faqat Vault ichida
+  4. Vault: SHA-256(document) == file_hash check (integrity)
+  5. Plaintext only inside Vault
 ```
 
-### Xavfsizlik
+### Security
 ```
-DB buzilsa     → DEK lar shifrlangan → hujjatlar xavfsiz
-S3 buzilsa     → hujjatlar shifrlangan → xavfsiz
-Ikkalasi ham   → KEK private Vault da → BARIBIR xavfsiz
+If DB is compromised     → DEKs are encrypted → documents are safe
+If S3 is compromised     → documents are encrypted → safe
+If both are compromised  → KEK private is in Vault → STILL safe
 ```
 
-## Key Rotation Jadvali
+## Key Rotation Schedule
 
-| Key | Algorithm | Rotation | Grace period | Saqlash |
+| Key | Algorithm | Rotation | Grace period | Storage |
 |---|---|---|---|---|
-| JWT signing | ES256 (P-256) | Har 90 kunda | 30 kun (verify only) | Vault |
-| Transfer signing (per-user) | ECDSA P-256 | 365 kun yoki user so'rovi | 24 soat | Client: private, DB: public |
-| Card KEK | RSA-4096 | 365 kunda | 30 kun (decrypt only) | Vault |
-| KYC KEK | RSA-4096 | 365 kunda | 30 kun (decrypt only) | Vault |
-| TLS sertifikat | X.509 | 365 kunda | Auto-renew (Let's Encrypt) | Vault |
+| JWT signing | ES256 (P-256) | Every 90 days | 30 days (verify only) | Vault |
+| Transfer signing (per-user) | ECDSA P-256 | 365 days or user request | 24 hours | Client: private, DB: public |
+| Card KEK | RSA-4096 | Every 365 days | 30 days (decrypt only) | Vault |
+| KYC KEK | RSA-4096 | Every 365 days | 30 days (decrypt only) | Vault |
+| TLS certificate | X.509 | Every 365 days | Auto-renew (Let's Encrypt) | Vault |
 
 ## Encryption Keys DB Schema
 
@@ -342,12 +343,12 @@ CREATE TABLE encryption_keys (
     purpose         VARCHAR(30) NOT NULL,     -- JWT, CARD_KEK, KYC_KEK
     algorithm       VARCHAR(20) NOT NULL,     -- ES256, RSA-4096
     public_key_pem  TEXT NOT NULL,            -- PEM format
-    -- private_key DB DA SAQLANMAYDI! → Vault / HSM
+    -- private_key is NEVER STORED IN DB! → Vault / HSM
     key_version     INTEGER NOT NULL DEFAULT 1,
     status          VARCHAR(20) NOT NULL DEFAULT 'ACTIVE',
         -- ACTIVE, ROTATE_OUT, RETIRED
     activated_at    TIMESTAMPTZ NOT NULL,
-    rotate_after    TIMESTAMPTZ NOT NULL,     -- qachon rotate qilish kerak
+    rotate_after    TIMESTAMPTZ NOT NULL,     -- when rotation is needed
     retired_at      TIMESTAMPTZ,
     created_at      TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
@@ -375,7 +376,7 @@ CREATE INDEX idx_user_sign_keys ON user_signing_keys (user_id, status)
     WHERE status = 'ACTIVE';
 ```
 
-## HSM / Vault integratsiya
+## HSM / Vault Integration
 
 ```
 HashiCorp Vault:
@@ -383,7 +384,7 @@ HashiCorp Vault:
   ├── secret/xbank/card-kek/       → Card KEK private keys
   ├── secret/xbank/kyc-kek/        → KYC KEK private keys
   ├── transit/xbank/               → Encryption as a Service
-  └── pki/xbank/                   → TLS sertifikatlar
+  └── pki/xbank/                   → TLS certificates
 
 Access Policy:
   auth-service   → jwt/* (read)
@@ -392,7 +393,7 @@ Access Policy:
   admin          → * (rotate, create)
 ```
 
-## PKI Arxitektura diagramma
+## PKI Architecture Diagram
 
 ```
                     ┌─────────────────────┐
@@ -416,9 +417,9 @@ Access Policy:
               ▲
               │ verify (public key)
         ┌─────┴──────────────────────────────┐
-        │        Barcha servislar             │
-        │   JWKS endpoint dan public key     │
-        │   olib JWT ni verify qiladi        │
+        │        All services                 │
+        │   Get public key from JWKS         │
+        │   endpoint and verify JWT          │
         └────────────────────────────────────┘
 
         ┌──────────┐
@@ -426,60 +427,60 @@ Access Policy:
         │ (Mobile) │
         │          │
         │ ECDSA    │
-        │ private  │──→ transfer imzolaydi
+        │ private  │──→ signs transfers
         │ key      │
         └──────────┘
               │
-              │ public key (ro'yxatdan o'tganda)
+              │ public key (during registration)
               ▼
         ┌──────────┐
         │ Transfer │
-        │ Service  │──→ public key bilan verify
+        │ Service  │──→ verifies with public key
         └──────────┘
 ```
 
 ## End-to-End Encryption (E2EE)
 
-<!-- E2EE — sensitive ma'lumotlar client da shifrlanadi,
-     faqat HSM/Vault da deshifrlanadi.
-     Application server HECH QACHON plaintext ko'rmaydi.
-     Bu TLS ustiga qo'shimcha himoya qatlami. -->
+<!-- E2EE — sensitive data is encrypted on the client,
+     decrypted only in HSM/Vault.
+     The application server NEVER sees plaintext.
+     This is an additional layer of protection on top of TLS. -->
 
-### ECDH Key Exchange — Kalit Almashish Protokoli
+### ECDH Key Exchange — Key Agreement Protocol
 
-<!-- ECDH (Elliptic Curve Diffie-Hellman) — asimmetrik kalitlardan
-     simmetrik kalit hosil qilish usuli.
-     Signal Protocol, TLS 1.3, va WhatsApp E2EE ning asosi. -->
+<!-- ECDH (Elliptic Curve Diffie-Hellman) — a method for deriving
+     a symmetric key from asymmetric keys.
+     The basis of Signal Protocol, TLS 1.3, and WhatsApp E2EE. -->
 
-#### Asosiy Printsip
+#### Core Principle
 
 ```
-Client va Server hech qachon SECRET ni tarmoq orqali YUBORMAYDI.
-Har biri o'z private key + boshqaning public key = BIR XIL shared secret.
+Client and Server NEVER SEND the SECRET over the network.
+Each one: own private key + other's public key = SAME shared secret.
 
-Matematika (Elliptic Curve):
+Mathematics (Elliptic Curve):
   Client:  ephemeral_private × Server_public    = SHARED SECRET
-  Server:  server_private    × Ephemeral_public = SHARED SECRET  (BIR XIL!)
+  Server:  server_private    × Ephemeral_public = SHARED SECRET  (THE SAME!)
 
-  Sababi:  a × (b × G) = b × (a × G)   ← Elliptic Curve matematik xossasi
+  Reason:  a × (b × G) = b × (a × G)   ← Mathematical property of Elliptic Curves
            ^^^^^^^^^^^   ^^^^^^^^^^^
            client         server
-           hisoblaydi     hisoblaydi
+           computes       computes
 
-  G = Generator point (P-256 curve da oldindan belgilangan nuqta)
-  × = Elliptic Curve point multiplication (oddiy ko'paytirish emas!)
+  G = Generator point (a predefined point on the P-256 curve)
+  × = Elliptic Curve point multiplication (not ordinary multiplication!)
 ```
 
-#### To'liq Key Exchange Flow
+#### Full Key Exchange Flow
 
 ```
                     CLIENT                                      SERVER
                     ══════                                      ══════
 
-  ┌─ 1. Server public key ni olish ────────────────────────────────────────┐
+  ┌─ 1. Get the server public key ─────────────────────────────────────┐
   │                                                                         │
   │   GET /api/v1/crypto/public-key  ─────────────────────→                │
-  │                                                          Vault dan     │
+  │                                                          From Vault    │
   │                                                          public key    │
   │                                   ←─────────────────────               │
   │                                   {                                    │
@@ -489,42 +490,42 @@ Matematika (Elliptic Curve):
   │                                   }                                    │
   └────────────────────────────────────────────────────────────────────────┘
 
-  ┌─ 2. Client: Ephemeral keypair generatsiya (HAR SAFAR YANGI) ───────────┐
+  ┌─ 2. Client: Generate ephemeral keypair (NEW EACH TIME) ───────────────┐
   │                                                                         │
   │   ephemeral_private = random()                                         │
   │                       ^^^^^^^^                                         │
-  │                       Client da qoladi — HECH QACHON YUBORILMAYDI     │
+  │                       Stays on client — NEVER SENT                     │
   │                                                                         │
   │   ephemeral_public = ephemeral_private × G                             │
   │                      ^^^^^^^^^^^^^^^^^^                                │
-  │                      Server ga yuboriladi (ochiq, xavfsiz)             │
+  │                      Sent to server (public, safe)                     │
   └────────────────────────────────────────────────────────────────────────┘
 
-  ┌─ 3. Client: Shared secret hisoblash ───────────────────────────────────┐
+  ┌─ 3. Client: Compute shared secret ─────────────────────────────────────┐
   │                                                                         │
   │   shared_secret = ephemeral_private × server_public_key                │
   │                   ^^^^^^^^^^^^^^^^^   ^^^^^^^^^^^^^^^^^                 │
-  │                   faqat client        ochiq (API dan olgan)             │
-  │                   biladi                                                │
+  │                   only client         public (from API)                 │
+  │                   knows it                                              │
   │                                                                         │
-  │   ⚠️ shared_secret TARMOQDA YUBORILAMAYDI — hisoblangan qiymat        │
+  │   shared_secret is NEVER SENT over the network — it is a computed value│
   └────────────────────────────────────────────────────────────────────────┘
 
-  ┌─ 4. Client: Simmetrik kalit hosil qilish (HKDF) ──────────────────────┐
+  ┌─ 4. Client: Derive symmetric key (HKDF) ──────────────────────────────┐
   │                                                                         │
   │   salt = random_32_bytes                                               │
   │                                                                         │
   │   aes_key = HKDF-SHA256(                                               │
-  │     ikm:  shared_secret,        ← ECDH natijasi                       │
-  │     salt: salt,                 ← random (server ga yuboriladi)        │
+  │     ikm:  shared_secret,        ← ECDH result                         │
+  │     salt: salt,                 ← random (sent to server)              │
   │     info: "xbank-e2ee-v1",     ← context string (hardcoded)           │
   │     len:  32                    ← 256 bit = AES-256 key               │
   │   )                                                                    │
   │                                                                         │
-  │   Endi AES-256-GCM bilan shifrlash mumkin!                             │
+  │   Now encryption with AES-256-GCM is possible!                         │
   └────────────────────────────────────────────────────────────────────────┘
 
-  ┌─ 5. Client → Server: shifrlangan ma'lumot yuborish ────────────────────┐
+  ┌─ 5. Client → Server: send encrypted data ──────────────────────────────┐
   │                                                                         │
   │   nonce = random_12_bytes                                              │
   │   ciphertext = AES-256-GCM(plaintext, aes_key, nonce)                 │
@@ -532,173 +533,174 @@ Matematika (Elliptic Curve):
   │   POST /api/v1/cards  ────────────────────────────→                    │
   │   {                                                                     │
   │     "encrypted_pan": {                                                 │
-  │       "ciphertext": base64(ciphertext),           ← shifrlangan       │
-  │       "ephemeral_public_key": base64(eph_pub),    ← faqat PUBLIC key  │
+  │       "ciphertext": base64(ciphertext),           ← encrypted          │
+  │       "ephemeral_public_key": base64(eph_pub),    ← only PUBLIC key    │
   │       "nonce": base64(nonce),                     ← AES-GCM nonce     │
   │       "salt": base64(salt),                       ← HKDF salt         │
-  │       "key_id": "e2ee_2026_q2"                    ← qaysi server key  │
+  │       "key_id": "e2ee_2026_q2"                    ← which server key  │
   │     }                                                                   │
   │   }                                                                     │
   │                                                                         │
-  │   ⚠️ Yuborilgan: ephemeral_public, ciphertext, nonce, salt            │
-  │   ⚠️ YUBORILMAGAN: ephemeral_private, shared_secret, aes_key          │
+  │   SENT: ephemeral_public, ciphertext, nonce, salt                      │
+  │   NOT SENT: ephemeral_private, shared_secret, aes_key                  │
   └────────────────────────────────────────────────────────────────────────┘
 
-  ┌─ 6. Server (Vault): BIR XIL shared secret hisoblash ───────────────────┐
+  ┌─ 6. Server (Vault): Compute THE SAME shared secret ────────────────────┐
   │                                                                         │
-  │   Vault ichida (server application ko'rmaydi):                         │
+  │   Inside Vault (server application never sees it):                     │
   │                                                                         │
   │   shared_secret = server_private × ephemeral_public_key                │
   │                   ^^^^^^^^^^^^^^   ^^^^^^^^^^^^^^^^^^^^                 │
-  │                   faqat Vault      client yubordi                      │
-  │                   biladi                                                │
+  │                   only Vault       client sent it                       │
+  │                   knows it                                              │
   │                                                                         │
   │   aes_key = HKDF-SHA256(shared_secret, salt, "xbank-e2ee-v1")         │
   │                                                                         │
   │   plaintext = AES-256-GCM_Decrypt(ciphertext, aes_key, nonce)         │
   │                                                                         │
-  │   ✅ Client va Server BIR XIL aes_key ni hisobladi!                    │
-  │   ✅ Chunki: eph_priv × srv_pub = srv_priv × eph_pub                  │
+  │   Client and Server computed THE SAME aes_key!                         │
+  │   Because: eph_priv × srv_pub = srv_priv × eph_pub                    │
   └────────────────────────────────────────────────────────────────────────┘
 ```
 
-#### Tarmoqda Nima Ko'rinadi / Ko'rinmaydi
+#### What Is Visible / Not Visible on the Network
 
 ```
-Hacker tarmoqni tinglayapti (MITM yoki packet sniffing):
+A hacker is sniffing the network (MITM or packet sniffing):
 
   ┌─────────────────────────────────────────────────────────────────┐
-  │  KO'RA OLADI (public/ochiq)      │  KO'RA OLMAYDI (secret)    │
+  │  CAN SEE (public/open)            │  CANNOT SEE (secret)       │
   │──────────────────────────────────│─────────────────────────────│
-  │  ✅ server_public_key            │  ❌ server_private_key      │
-  │     (API dan ochiq olinadi)      │     (faqat Vault da)        │
+  │  server_public_key               │  server_private_key         │
+  │     (openly obtained from API)   │     (only in Vault)         │
   │                                   │                             │
-  │  ✅ ephemeral_public_key         │  ❌ ephemeral_private_key   │
-  │     (request ichida yuboriladi)  │     (client memory, keyin   │
-  │                                   │      o'chiriladi)           │
+  │  ephemeral_public_key            │  ephemeral_private_key      │
+  │     (sent inside the request)    │     (in client memory,      │
+  │                                   │      then deleted)          │
   │                                   │                             │
-  │  ✅ ciphertext                   │  ❌ shared_secret           │
-  │     (shifrlangan, foydasiz)      │     (hisoblangan, tarmoqda  │
-  │                                   │      hech qachon o'tmagan)  │
+  │  ciphertext                      │  shared_secret              │
+  │     (encrypted, useless)         │     (computed, never        │
+  │                                   │      passed over network)   │
   │                                   │                             │
-  │  ✅ nonce, salt                  │  ❌ aes_key                 │
-  │     (key siz foydasiz)           │     (HKDF natijasi)         │
+  │  nonce, salt                     │  aes_key                    │
+  │     (useless without key)        │     (HKDF result)           │
   │                                   │                             │
-  │                                   │  ❌ plaintext              │
-  │                                   │     (original ma'lumot)     │
+  │                                   │  plaintext                 │
+  │                                   │     (original data)         │
   └─────────────────────────────────────────────────────────────────┘
 
-  Hacker ikkita public key ni ko'radi:
+  The hacker sees two public keys:
     server_public  = srv_priv × G
     ephemeral_public = eph_priv × G
 
-  shared_secret = srv_priv × eph_priv × G  ni hisoblash uchun
-  srv_priv YOKI eph_priv ni bilish kerak.
+  To compute shared_secret = srv_priv × eph_priv × G
+  they need to know either srv_priv OR eph_priv.
 
-  Public key dan private key ni topish = ECDLP
+  Deriving private key from public key = ECDLP
   (Elliptic Curve Discrete Logarithm Problem)
 
-  P-256 uchun: ~2^128 operatsiya kerak
-  = Hozirgi eng kuchli superkompyuter bilan MILLIARDLAB yillar
+  For P-256: ~2^128 operations needed
+  = BILLIONS of years with today's most powerful supercomputer
 ```
 
-#### Forward Secrecy (Oldinga Maxfiylik)
+#### Forward Secrecy
 
 ```
-Har bir request uchun YANGI ephemeral keypair generatsiya qilinadi:
+A NEW ephemeral keypair is generated for EACH request:
 
   Request 1: eph_key_A → shared_secret_A → aes_key_A → encrypt(PAN_1)
   Request 2: eph_key_B → shared_secret_B → aes_key_B → encrypt(PAN_2)
   Request 3: eph_key_C → shared_secret_C → aes_key_C → encrypt(KYC_doc)
 
-  eph_key_A, B, C — har biri random, bir-biriga BOG'LIQ EMAS.
-  Request tugagach ephemeral_private_key memory dan O'CHIRILADI.
+  eph_key_A, B, C — each is random, NOT RELATED to each other.
+  After the request, ephemeral_private_key is DELETED from memory.
 
-Natija:
+Result:
   ┌─────────────────────────────────────────────────────────────┐
-  │  Ssenariy                      │  Xavfsizlik              │
+  │  Scenario                        │  Security                │
   │────────────────────────────────│──────────────────────────│
-  │  Bitta aes_key buzilsa         │  Faqat SHU request       │
-  │                                │  ochiladi. Boshqalar      │
-  │                                │  XAVFSIZ.                 │
-  │                                │                           │
-  │  server_private_key leak       │  OLDINGI requestlarni     │
-  │  bo'lsa (Vault buzilsa)        │  deshifrlab BO'LMAYDI.   │
-  │                                │  Chunki eph_private lar   │
-  │                                │  allaqachon o'chirilgan.  │
-  │                                │                           │
-  │  Kelajakdagi requestlar?       │  Key rotate qilinadi →   │
-  │                                │  yangi server keypair.    │
+  │  If one aes_key is broken        │  Only THAT request is    │
+  │                                  │  exposed. Others are     │
+  │                                  │  SAFE.                   │
+  │                                  │                          │
+  │  If server_private_key leaks     │  PREVIOUS requests       │
+  │  (Vault is compromised)          │  CANNOT be decrypted.    │
+  │                                  │  Because eph_private     │
+  │                                  │  keys are already        │
+  │                                  │  deleted.                │
+  │                                  │                          │
+  │  Future requests?                │  Key is rotated →        │
+  │                                  │  new server keypair.     │
   └─────────────────────────────────────────────────────────────┘
 
-  Bu Signal Protocol ning asosiy xossasi:
+  This is the core property of Signal Protocol:
   "Compromise one session → does NOT compromise past sessions"
 ```
 
-#### Signal Protocol bilan Taqqoslash
+#### Comparison with Signal Protocol
 
 ```
 Signal Protocol (X3DH + Double Ratchet):
-  - Ikki FOYDALANUVCHI o'rtasida (peer-to-peer messaging)
+  - Between two USERS (peer-to-peer messaging)
   - Identity key + Signed pre-key + One-time pre-key
-  - Double Ratchet: har bir xabar uchun yangi key
-  - Maqsad: real-time chat encryption
+  - Double Ratchet: new key for each message
+  - Purpose: real-time chat encryption
 
 XBank E2EE (ECIES):
-  - CLIENT → SERVER o'rtasida (client-to-HSM)
+  - Between CLIENT → SERVER (client-to-HSM)
   - Server static key + Client ephemeral key
-  - Har bir request uchun yangi ephemeral key (forward secrecy)
-  - Maqsad: sensitive financial data encryption
+  - New ephemeral key for each request (forward secrecy)
+  - Purpose: sensitive financial data encryption
 
   ┌────────────────────────────────────────────────────────────┐
   │                    │  Signal X3DH        │  XBank ECIES    │
   │────────────────────│─────────────────────│─────────────────│
-  │  Tomonlar          │  User ↔ User        │  Client → HSM   │
+  │  Parties           │  User ↔ User        │  Client → HSM   │
   │  Key exchange      │  X3DH (3 ECDH)      │  1 ECDH         │
-  │  Forward secrecy   │  ✅ Double Ratchet  │  ✅ Ephemeral   │
-  │  Key rotation      │  Har bir xabar      │  Har bir request│
-  │  Murakkablik       │  Yuqori             │  O'rtacha        │
+  │  Forward secrecy   │  Double Ratchet     │  Ephemeral      │
+  │  Key rotation      │  Every message      │  Every request  │
+  │  Complexity        │  High               │  Medium          │
   │  Use case          │  Messaging          │  Financial data  │
   └────────────────────────────────────────────────────────────┘
 
-  XBank uchun Signal to'liq kerak emas:
-  - Biz user↔user chat qilmaymiz
-  - Biz client→server sensitive data yuboramiz
-  - ECIES = Signal ning key exchange qismining soddalashtirilgan versiyasi
+  Full Signal is not needed for XBank:
+  - We don't do user↔user chat
+  - We send sensitive data from client→server
+  - ECIES = a simplified version of Signal's key exchange part
 ```
 
-### Nima uchun TLS yetarli emas?
+### Why TLS Alone Is Not Enough?
 
 ```
-Faqat TLS:
+TLS only:
   Client ──TLS──→ Load Balancer ──plaintext──→ App Server ──plaintext──→ memory
                         ↑                          ↑                       ↑
-                   TLS terminate              plaintext log ga           memory dump
-                   (reverse proxy)            tushib qolishi mumkin      attack
+                   TLS terminate              plaintext could           memory dump
+                   (reverse proxy)            end up in logs            attack
 
 E2EE + TLS:
   Client ──encrypt──→ TLS ──→ App Server ──ciphertext──→ HSM/Vault ──decrypt
                                     ↑                         ↑
-                              plaintext YO'Q              faqat shu yerda
-                              server memory da            deshifrlanadi
+                              NO plaintext              only here is it
+                              in server memory          decrypted
 ```
 
-### E2EE Arxitekturasi: Client-to-HSM
+### E2EE Architecture: Client-to-HSM
 
 ```
 ┌──────────────────────────────────────────────────────────────────────┐
 │                        CLIENT (Mobile/Web)                          │
 │                                                                      │
-│  1. Server public key ni olish:                                      │
+│  1. Get server public key:                                           │
 │     GET /api/v1/crypto/public-key → ECDH public key (P-256)         │
 │                                                                      │
-│  2. Sensitive field ni shifrlash (ECIES):                            │
+│  2. Encrypt the sensitive field (ECIES):                             │
 │     ephemeral_key = ECDH_GenerateKeypair()                          │
 │     shared_secret = ECDH(ephemeral_private, server_public)          │
 │     derived_key   = HKDF-SHA256(shared_secret, salt, info)          │
 │     ciphertext    = AES-256-GCM(plaintext, derived_key, nonce)      │
 │                                                                      │
-│  3. Request yuborish:                                                │
+│  3. Send request:                                                    │
 │     {                                                                │
 │       "account_id": "acc-uuid",          ← plaintext (TLS only)     │
 │       "amount": 100000,                  ← plaintext (TLS only)     │
@@ -716,16 +718,16 @@ E2EE + TLS:
 ┌──────────────────────────────────────────────────────────────────────┐
 │                      APPLICATION SERVER                              │
 │                                                                      │
-│  Server encrypted_pan ni OCHMAYDI — ciphertext holida                │
-│  Vault/HSM ga proxy qiladi:                                         │
+│  Server does NOT OPEN encrypted_pan — keeps it as ciphertext         │
+│  Proxies to Vault/HSM:                                               │
 │                                                                      │
 │  result = vault.Decrypt("transit/xbank/e2ee", ciphertext, nonce,    │
 │                          ephemeral_public_key)                       │
 │                                                                      │
-│  yoki                                                                │
+│  or                                                                  │
 │                                                                      │
-│  Server ciphertext ni to'g'ridan-to'g'ri DB ga saqlaydi             │
-│  (karta PAN, KYC hujjat — qayta ishlash kerak emas)                 │
+│  Server stores ciphertext directly in DB                             │
+│  (card PAN, KYC document — no processing needed)                     │
 └──────────────────────────────────────────────────────────────────────┘
          │
          ▼
@@ -735,25 +737,25 @@ E2EE + TLS:
 │  1. Ephemeral public key + server private key → shared_secret        │
 │  2. HKDF-SHA256(shared_secret) → derived_key                        │
 │  3. AES-256-GCM_Decrypt(ciphertext, derived_key, nonce)             │
-│  4. Plaintext → qayta ishlash → natija                              │
-│  5. Plaintext memory dan DARHOL tozalash                            │
+│  4. Plaintext → process → result                                    │
+│  5. Clear plaintext from memory IMMEDIATELY                          │
 │                                                                      │
-│  Private key HECH QACHON Vault dan tashqariga chiqmaydi!            │
+│  Private key NEVER leaves Vault!                                     │
 └──────────────────────────────────────────────────────────────────────┘
 ```
 
 ### ECIES (Elliptic Curve Integrated Encryption Scheme)
 
 <!-- ECIES = ECDH key agreement + HKDF key derivation + AES-GCM encryption
-     Har bir xabar uchun yangi ephemeral key → forward secrecy -->
+     New ephemeral key for each message → forward secrecy -->
 
 ```
-ECIES shifrlash jarayoni:
+ECIES encryption process:
 
-  1. Ephemeral keypair generatsiya:
+  1. Generate ephemeral keypair:
      ephemeral_private, ephemeral_public = ECDH_Generate(P-256)
 
-  2. Shared secret hisoblash:
+  2. Compute shared secret:
      shared_secret = ECDH(ephemeral_private, server_public_key)
 
   3. Key derivation:
@@ -764,71 +766,71 @@ ECIES shifrlash jarayoni:
        len:  32  // AES-256 key
      )
 
-  4. Shifrlash:
+  4. Encryption:
      nonce = random_12_bytes  // AES-GCM nonce
      ciphertext, tag = AES-256-GCM_Encrypt(plaintext, encryption_key, nonce)
 
-  5. Natija:
+  5. Result:
      {
        ciphertext:          ciphertext || tag,   // encrypted data + auth tag
-       ephemeral_public_key: ephemeral_public,   // ECDH uchun
+       ephemeral_public_key: ephemeral_public,   // for ECDH
        nonce:               nonce,               // AES-GCM nonce
        salt:                salt,                // HKDF salt
-       key_id:              "e2ee_2026_q2"       // qaysi server key ishlatilgan
+       key_id:              "e2ee_2026_q2"       // which server key was used
      }
 ```
 
-### Nima uchun ECIES?
+### Why ECIES?
 
-| Xususiyat | RSA-OAEP | ECIES |
+| Property | RSA-OAEP | ECIES |
 |---|---|---|
 | Key size | 4096-bit | 256-bit (P-256) |
-| Max plaintext | ~446 byte (RSA-4096) | **Cheksiz** (hybrid) |
-| Forward secrecy | ❌ Yo'q | ✅ Ha (ephemeral key) |
-| Performance | Sekin | **Tez** |
-| Mobile battery | Ko'p sarflaydi | **Kam** |
+| Max plaintext | ~446 byte (RSA-4096) | **Unlimited** (hybrid) |
+| Forward secrecy | No | Yes (ephemeral key) |
+| Performance | Slow | **Fast** |
+| Mobile battery | High consumption | **Low** |
 
-### Qaysi Fieldlar E2EE Talab Qiladi
+### Which Fields Require E2EE
 
-| Field | E2EE | Sabab |
+| Field | E2EE | Reason |
 |---|---|---|
-| Card PAN (16 raqam) | ✅ **Majburiy** | PCI DSS — server memory da plaintext bo'lmasligi kerak |
-| Card PIN | ✅ **Majburiy** | ISO 9564 — faqat HSM decrypt qiladi |
-| Card CVV | ✅ **Majburiy** | PCI DSS — hech qachon saqlanmaydi, faqat tekshirish |
-| KYC hujjat (passport, selfie) | ✅ **Majburiy** | Shaxsiy ma'lumot — GDPR, mahalliy qonunchilik |
-| KYC hujjat raqami | ✅ **Majburiy** | PII (Personally Identifiable Information) |
-| Transfer amount | ❌ Yo'q | Server balance tekshirishi kerak — plaintext zarur |
-| Account ID | ❌ Yo'q | Server routing qilishi kerak |
-| OTP / 2FA code | ❌ Yo'q | Server verify qiladi, TLS yetarli |
-| Login credentials | ⚠️ SRP yoki TLS | Parol server ga plaintext kelmaydi (bcrypt client da emas) |
+| Card PAN (16 digits) | **Required** | PCI DSS — plaintext must not be in server memory |
+| Card PIN | **Required** | ISO 9564 — only HSM decrypts |
+| Card CVV | **Required** | PCI DSS — never stored, only for verification |
+| KYC document (passport, selfie) | **Required** | Personal data — GDPR, local legislation |
+| KYC document number | **Required** | PII (Personally Identifiable Information) |
+| Transfer amount | No | Server needs to check balance — plaintext required |
+| Account ID | No | Server needs to route |
+| OTP / 2FA code | No | Server verifies, TLS is sufficient |
+| Login credentials | SRP or TLS | Password should not reach server as plaintext (bcrypt not on client) |
 
 ### PIN Block (ISO 9564)
 
-<!-- PIN faqat HSM da decrypt bo'ladi — server HECH QACHON plaintext PIN ko'rmaydi -->
+<!-- PIN is decrypted only in HSM — server NEVER sees plaintext PIN -->
 
 ```
-PIN shifrlash (ATM/POS/Mobile):
+PIN encryption (ATM/POS/Mobile):
 
   Format 0 (ISO 9564-1):
     1. PIN block = PIN length || PIN || padding (F)
-       Misol: PIN = "1234"
+       Example: PIN = "1234"
        PIN block = 0x04 1234 FFFFFFFFFF
 
-    2. PAN block = 0000 || PAN[3..14]  (oxirgi 12 raqam, check digit siz)
+    2. PAN block = 0000 || PAN[3..14]  (last 12 digits, without check digit)
        PAN = 4000001234567890
        PAN block = 0x0000 000123456789
 
     3. Clear PIN block = PIN block XOR PAN block
 
     4. Encrypted PIN block = AES-256-GCM(clear_pin_block, pin_encryption_key)
-       yoki
-       3DES_Encrypt(clear_pin_block, ZPK)  // legacy terminal lar uchun
+       or
+       3DES_Encrypt(clear_pin_block, ZPK)  // for legacy terminals
 
-Mobile/Web uchun:
+For Mobile/Web:
     1. Client → ECIES(PIN, server_e2ee_public_key) → encrypted_pin
-    2. Server → Vault ga yuborish (plaintext ko'rmaydi)
-    3. Vault → decrypt → PIN hash (bcrypt) → saqlash
-    4. Keyingi verify: Vault da bcrypt.Compare()
+    2. Server → sends to Vault (never sees plaintext)
+    3. Vault → decrypt → PIN hash (bcrypt) → store
+    4. Subsequent verify: bcrypt.Compare() in Vault
 ```
 
 ### E2EE Key Management
@@ -845,18 +847,18 @@ Vault Secrets:
 ### E2EE Key Rotation
 
 ```
-1. Yangi ECDH P-256 keypair generatsiya (Vault ichida)
+1. Generate new ECDH P-256 keypair (inside Vault)
    vault write transit/xbank/e2ee/keys type=ecdsa-p256
 
-2. Public key ni API orqali e'lon qilish
+2. Publish public key via API
    GET /api/v1/crypto/public-key
    → { key_id: "e2ee_2026_q2", public_key: PEM, algorithm: "ECIES-P256" }
 
-3. Client yangi key_id bilan shifrlashni boshlaydi
+3. Client starts encrypting with new key_id
 
-4. Eski key → ROTATE_OUT (90 kun — eski client lar uchun decrypt davom etadi)
+4. Old key → ROTATE_OUT (90 days — decryption continues for old clients)
 
-5. 90 kundan keyin → RETIRED (faqat arxivdagi ma'lumotlar uchun)
+5. After 90 days → RETIRED (only for archived data)
 ```
 
 ### Go Implementation
@@ -869,7 +871,7 @@ import (
     "golang.org/x/crypto/hkdf"
 )
 
-// Client side: ECIES shifrlash
+// Client side: ECIES encryption
 func ECIESEncrypt(plaintext []byte, serverPubKey *ecdh.PublicKey) (*EncryptedPayload, error) {
     // 1. Ephemeral keypair
     curve := ecdh.P256()
@@ -907,7 +909,7 @@ func ECIESEncrypt(plaintext []byte, serverPubKey *ecdh.PublicKey) (*EncryptedPay
     }, nil
 }
 
-// EncryptedPayload — E2EE shifrlangan ma'lumot
+// EncryptedPayload — E2EE encrypted data
 type EncryptedPayload struct {
     Ciphertext         []byte `json:"ciphertext"`
     EphemeralPublicKey []byte `json:"ephemeral_public_key"`
@@ -918,9 +920,9 @@ type EncryptedPayload struct {
 ```
 
 ```go
-// Server side: Vault ga proxy qilish (server plaintext ko'rmaydi)
+// Server side: Proxy to Vault (server never sees plaintext)
 func (s *CryptoService) DecryptE2EE(ctx context.Context, payload *EncryptedPayload) ([]byte, error) {
-    // Server o'zi decrypt QILMAYDI — Vault ga yuboradi
+    // Server does NOT decrypt itself — sends to Vault
     result, err := s.vault.Logical().WriteWithContext(ctx,
         "transit/xbank/e2ee/decrypt",
         map[string]interface{}{
@@ -940,14 +942,14 @@ func (s *CryptoService) DecryptE2EE(ctx context.Context, payload *EncryptedPaylo
 }
 ```
 
-### E2EE Request/Response Formati
+### E2EE Request/Response Format
 
 ```
-Karta qo'shish (E2EE bilan):
+Adding a card (with E2EE):
 
 POST /api/v1/cards
 {
-  "account_id": "acc-uuid",                    ← plaintext (server kerak)
+  "account_id": "acc-uuid",                    ← plaintext (server needs it)
   "cardholder_name": "BAKHODIR YASHINI",       ← plaintext
   "encrypted_pan": {                           ← E2EE
     "ciphertext": "base64...",
@@ -984,32 +986,32 @@ Response:
 }
 ```
 
-### E2EE + Existing Encryption Orasidagi Farq
+### Difference Between E2EE and Existing Encryption
 
 ```
-Hozirgi (server-side encryption):
+Current (server-side encryption):
   Client ──plaintext──→ TLS ──→ Server ──AES-GCM encrypt──→ DB
                                   ↑
-                            plaintext server
-                            memory da bor!
+                            plaintext exists in
+                            server memory!
 
 E2EE (client-side encryption):
   Client ──ECIES encrypt──→ TLS ──→ Server ──ciphertext──→ Vault decrypt
                                       ↑                        ↑
-                                plaintext YO'Q           faqat Vault da
-                                server memory da         plaintext bor
+                                NO plaintext            only in Vault
+                                in server memory        plaintext exists
 
-Natija: Ikki qatlam himoya
-  1. TLS 1.3     → transport (MITM dan)
-  2. ECIES (E2EE) → application (server compromise dan)
+Result: Two layers of protection
+  1. TLS 1.3     → transport (against MITM)
+  2. ECIES (E2EE) → application (against server compromise)
 ```
 
 ## API Endpoints
 
-| Method | Endpoint | Middleware | Tavsif |
+| Method | Endpoint | Middleware | Description |
 |---|---|---|---|
 | GET | `/api/v1/crypto/public-key` | Public | E2EE server public key (ECIES P-256) |
-| POST | `/api/v1/auth/signing-keys` | Session | Client public key ro'yxatdan o'tkazish |
-| DELETE | `/api/v1/auth/signing-keys/{id}` | Session+2FA | Signing key revoke |
-| GET | `/api/v1/auth/signing-keys` | Session | Faol signing keys ro'yxati |
+| POST | `/api/v1/auth/signing-keys` | Session | Register client public key |
+| DELETE | `/api/v1/auth/signing-keys/{id}` | Session+2FA | Revoke signing key |
+| GET | `/api/v1/auth/signing-keys` | Session | List of active signing keys |
 | GET | `/.well-known/jwks.json` | Public | JWT public keys (JWKS) |

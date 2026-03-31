@@ -1,4 +1,4 @@
-# XBank — Arxitektura Umumiy Ko'rinish
+# XBank — Architecture Overview
 
 ## Tech Stack
 - **Go 1.22+** + **GoFiber v2** (fasthttp)
@@ -11,32 +11,32 @@
 - **HashiCorp Vault** (key management — JWT, Card KEK, KYC KEK private keys)
 - **Docker + docker-compose**
 
-## Arxitektura: DDD Modular Monolith
+## Architecture: DDD Modular Monolith
 
-Bounded contextlar Go package sifatida — microservice'ga o'tish oson.
+Bounded contexts as Go packages — easy to migrate to microservices.
 
-| Context | Aggregate Roots | Mas'uliyat |
+| Context | Aggregate Roots | Responsibility |
 |---|---|---|
 | **Identity** | `User`, `Session` | Auth, 2FA, KYC, RBAC |
 | **Account** | `Account` | Event Sourced, double-entry ledger, hold |
 | **Transfer** | `Transfer` | Saga, AML, idempotency, ECDSA signing |
-| **Card** | `Card` | PCI DSS, tokenizatsiya |
-| **Beneficiary** | `Beneficiary` | Transfer qiluvchilar |
-| **Exchange** | `ExchangeRate` | Valyuta kurslari |
+| **Card** | `Card` | PCI DSS, tokenization |
+| **Beneficiary** | `Beneficiary` | Transfer recipients |
+| **Exchange** | `ExchangeRate` | Currency rates |
 | **Notification** | `AuditRecord` | SSE, alerts, audit |
 | **Fraud** | `FraudCheck` | Risk scoring, velocity |
 | **Crypto** | `EncryptionKey`, `SigningKey` | PKI, key rotation, Vault integration |
 
-## Asosiy Patternlar
+## Core Patterns
 
-- **Event Sourcing** — Account holati eventlar yig'indisi
-- **CQRS** — Write (primary) / Read (replica) ajratilgan
+- **Event Sourcing** — Account state is the sum of events
+- **CQRS** — Write (primary) / Read (replica) separated
 - **Saga** — Transfer multi-step orchestrator
-- **Double-Entry Bookkeeping** — Har bir transfer = debit + credit
+- **Double-Entry Bookkeeping** — Every transfer = debit + credit
 - **Specification Pattern** — Business rules (SufficientBalance, DailyLimit)
 - **Unit of Work** — Transactional boundary = aggregate boundary
 
-## Loyiha Strukturasi
+## Project Structure
 
 ```
 XBank/
@@ -62,7 +62,7 @@ XBank/
 └── docker-compose.yml
 ```
 
-## Middleware Stack (14 ta)
+## Middleware Stack (14 total)
 
 ```
 1.  Recovery           — Panic recovery

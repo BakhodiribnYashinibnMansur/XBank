@@ -1,4 +1,4 @@
-# Backend Ishlash Flow
+# Backend Operation Flow
 
 ## Request Lifecycle
 
@@ -20,8 +20,8 @@ Client Request
 │  9. Audit Logger (request log)               │
 │ 10. Session (JWT validate → Redis check)     │
 │ 11. RBAC/ABAC (role + attribute check)       │
-│ 12. 2FA (agar kerak)                         │
-│ 13. KYC Required (agar kerak)                │
+│ 12. 2FA (if required)                        │
+│ 13. KYC Required (if required)               │
 │ 14. Device Fingerprint                       │
 └─────────────────────────────────────────────┘
     │
@@ -29,8 +29,8 @@ Client Request
 ┌─────────────────────────────────────────────┐
 │              HTTP HANDLER                    │
 │  - Request DTO parse + validate              │
-│  - Command/Query yaratish                    │
-│  - Application service chaqirish             │
+│  - Create Command/Query                      │
+│  - Call application service                  │
 │  - Response DTO format                       │
 └─────────────────────────────────────────────┘
     │
@@ -40,7 +40,7 @@ Client Request
 │  Command Handler:                            │
 │  1. Idempotency check                        │
 │  2. UnitOfWork.Begin(SERIALIZABLE)           │
-│  3. Repository.Load (aggregate yuklash)      │
+│  3. Repository.Load (load aggregate)         │
 │  4. Domain logic (aggregate methods)         │
 │  5. Specification check (balance, limit)     │
 │  6. Repository.Save (event store)            │
@@ -48,7 +48,7 @@ Client Request
 │  8. EventBus.Publish (after commit)          │
 │                                              │
 │  Query Handler:                              │
-│  1. Read Model'dan query (read replica)      │
+│  1. Query from Read Model (read replica)     │
 │  2. Cursor-based pagination                  │
 └─────────────────────────────────────────────┘
     │
@@ -74,20 +74,20 @@ Client Request
 │  - Event Bus (sync + async)                  │
 └─────────────────────────────────────────────┘
 
-## Transfer Flow (batafsil)
+## Transfer Flow (detailed)
 
 ```
 POST /api/v1/transfers
     │
     ▼
-Middleware Stack (14 ta) → Handler
+Middleware Stack (14 total) → Handler
     │
     ▼
 InitiateTransferHandler:
     │
     ├── 1. Idempotency check (DB lookup)
-    │       ├── Key bor → return cached response
-    │       └── Key yo'q → davom et
+    │       ├── Key exists → return cached response
+    │       └── Key missing → continue
     │
     ├── 2. BEGIN SERIALIZABLE transaction
     │
@@ -173,13 +173,13 @@ Domain Event (after commit)
                                                     └── Admin manual review
 ```
 
-## Request/Response Logging (DB ga)
+## Request/Response Logging (to DB)
 
-<!-- Middleware #9 (Audit Logger) — har bir HTTP request va response ni
-     PostgreSQL ga saqlaydi. Banking regulyator talabi.
-     Sensitive ma'lumotlar MASK qilinadi. -->
+<!-- Middleware #9 (Audit Logger) — saves every HTTP request and response
+     to PostgreSQL. Required by banking regulators.
+     Sensitive data is MASKED. -->
 
-### Request Log Jadvali
+### Request Log Table
 
 ```sql
 CREATE TABLE request_logs (
@@ -189,39 +189,39 @@ CREATE TABLE request_logs (
     method           VARCHAR(10) NOT NULL,         -- GET, POST, PUT, DELETE
     path             VARCHAR(500) NOT NULL,         -- /api/v1/transfers
     query_params     TEXT,                          -- ?page=1&limit=20
-    request_headers  JSONB,                         -- masklangan headers
-    request_body     JSONB,                         -- masklangan body
+    request_headers  JSONB,                         -- masked headers
+    request_body     JSONB,                         -- masked body
 
     -- Response
     status_code      SMALLINT NOT NULL,             -- 200, 400, 401, 500
-    response_body    JSONB,                         -- masklangan body
+    response_body    JSONB,                         -- masked body
     response_headers JSONB,
 
     -- Metadata
     request_id       VARCHAR(64) NOT NULL,          -- X-Request-ID
     correlation_id   VARCHAR(64),                   -- X-Correlation-ID
-    user_id          UUID,                          -- JWT dan (agar auth bo'lsa)
+    user_id          UUID,                          -- from JWT (if authenticated)
     session_id       UUID,                          -- Session ID
     ip_address       INET NOT NULL,                 -- Client IP
     user_agent       TEXT,                          -- User-Agent header
     device_id        VARCHAR(255),                  -- X-Device-Fingerprint
 
     -- Performance
-    duration_ms      INTEGER NOT NULL,              -- Response vaqti (ms)
-    request_size     INTEGER,                       -- Request body hajmi (bytes)
-    response_size    INTEGER,                       -- Response body hajmi (bytes)
+    duration_ms      INTEGER NOT NULL,              -- Response time (ms)
+    request_size     INTEGER,                       -- Request body size (bytes)
+    response_size    INTEGER,                       -- Response body size (bytes)
 
     -- Timestamps
     created_at       TIMESTAMPTZ NOT NULL DEFAULT NOW()
 ) PARTITION BY RANGE (created_at);
 
--- Har oylik partitsiya
+-- Monthly partitions
 CREATE TABLE request_logs_2026_03 PARTITION OF request_logs
     FOR VALUES FROM ('2026-03-01') TO ('2026-04-01');
 CREATE TABLE request_logs_2026_04 PARTITION OF request_logs
     FOR VALUES FROM ('2026-04-01') TO ('2026-05-01');
 
--- Indekslar
+-- Indexes
 CREATE INDEX idx_req_logs_user      ON request_logs (user_id, created_at DESC);
 CREATE INDEX idx_req_logs_path      ON request_logs (path, created_at DESC);
 CREATE INDEX idx_req_logs_status    ON request_logs (status_code, created_at DESC);
@@ -233,39 +233,39 @@ CREATE INDEX idx_req_logs_created   ON request_logs (created_at DESC);
 ### Middleware Flow
 
 ```
-Request keldi
+Request arrives
     │
     ▼
 ┌─ Audit Logger Middleware (#9) ──────────────────────────────────────┐
 │                                                                      │
-│  1. REQUEST boshlanganda:                                            │
+│  1. When REQUEST starts:                                             │
 │     start_time = time.Now()                                         │
 │     request_id = c.Locals("requestID")                              │
-│     request_body = c.Body()          ← clone qilish (stream bir    │
-│                                         marta o'qiladi)             │
+│     request_body = c.Body()          ← clone it (stream can only   │
+│                                         be read once)               │
 │                                                                      │
-│  2. c.Next() → handler ishlaydi → response tayyor                   │
+│  2. c.Next() → handler executes → response ready                    │
 │                                                                      │
-│  3. RESPONSE tayyor bo'lganda:                                       │
+│  3. When RESPONSE is ready:                                          │
 │     duration = time.Since(start_time)                               │
 │     status_code = c.Response().StatusCode()                         │
 │     response_body = c.Response().Body()                             │
 │                                                                      │
-│  4. Sensitive data MASKLASH (response yuborilgandan KEYIN)          │
+│  4. MASK sensitive data (AFTER response is sent)                    │
 │                                                                      │
-│  5. Async DB yozish (response ni KUTMAYMIZ)                        │
+│  5. Async DB write (we DON'T WAIT for the response)                │
 │     go func() {                                                      │
 │         db.InsertRequestLog(logEntry)                               │
 │     }()                                                              │
 │                                                                      │
-│  ⚠️ DB yozish ASYNC — response tezligiga ta'sir qilmaydi            │
+│  ⚠️ DB write is ASYNC — does not affect response speed               │
 └──────────────────────────────────────────────────────────────────────┘
 ```
 
-### Sensitive Data Masklash
+### Sensitive Data Masking
 
 ```
-HECH QACHON loglanmaydigan fieldlar (to'liq o'chiriladi):
+Fields that are NEVER logged (completely removed):
   ❌ password           → "[REDACTED]"
   ❌ encrypted_pan      → "[REDACTED]"
   ❌ encrypted_pin      → "[REDACTED]"
@@ -274,11 +274,11 @@ HECH QACHON loglanmaydigan fieldlar (to'liq o'chiriladi):
   ❌ refresh_token      → "[REDACTED]"
   ❌ Authorization header → "Bearer [REDACTED]"
 
-Masklangan fieldlar (qisman ko'rsatiladi):
+Masked fields (partially shown):
   ⚠️ email             → "b***@example.com"
   ⚠️ phone             → "+998***1234"
   ⚠️ card_number       → "****7890"
-  ⚠️ ip_address        → to'liq saqlanadi (security uchun kerak)
+  ⚠️ ip_address        → stored in full (needed for security)
 
 Go pseudocode:
   func maskRequestBody(body []byte) []byte {
@@ -309,14 +309,14 @@ Go pseudocode:
   }
 ```
 
-### Nimalar Loglanadi (Misollar)
+### What Gets Logged (Examples)
 
 ```
-✅ Login (muvaffaqiyatli):
+✅ Login (successful):
   method: POST, path: /api/v1/auth/login, status: 200
   request_body:  { "email": "b***@example.com", "password": "[REDACTED]" }
   response_body: { "status": "success", "data": { "access_token": "[REDACTED]" } }
-  user_id: null → user-uuid (login dan keyin)
+  user_id: null → user-uuid (after login)
   duration_ms: 145
 
 ✅ Transfer:
@@ -326,7 +326,7 @@ Go pseudocode:
   user_id: user-uuid
   duration_ms: 320
 
-✅ Karta yaratish (E2EE):
+✅ Card creation (E2EE):
   method: POST, path: /api/v1/cards, status: 201
   request_body:  {
     "account_id": "acc-uuid",
@@ -352,41 +352,41 @@ Go pseudocode:
   duration_ms: 3
 ```
 
-### Log Saqlash Muddati (Retention)
+### Log Retention Period
 
 ```
-Qoidalar:
-  - Request logs:   90 kun (aktiv), keyin arxivga
-  - Arxiv:          2 yil (cold storage / compressed)
-  - Audit log:      7 yil (regulyator talabi)
+Rules:
+  - Request logs:   90 days (active), then archived
+  - Archive:        2 years (cold storage / compressed)
+  - Audit log:      7 years (regulatory requirement)
 
-pg_cron (haftalik tozalash):
+pg_cron (weekly cleanup):
   SELECT cron.schedule('drop-old-request-logs', '0 3 * * 0',
     $$DROP TABLE IF EXISTS request_logs_old_partition$$
   );
 
-Partitsiya hajmi (taxminiy):
-  - 1000 req/soat × 24 × 30 = ~720,000 row/oy
-  - O'rtacha row hajmi: ~2 KB
-  - Oylik partitsiya: ~1.4 GB
-  - 90 kun: ~4.2 GB
+Partition size (approximate):
+  - 1000 req/hour × 24 × 30 = ~720,000 rows/month
+  - Average row size: ~2 KB
+  - Monthly partition: ~1.4 GB
+  - 90 days: ~4.2 GB
 ```
 
-### Admin API (Log qidiruv)
+### Admin API (Log search)
 
 ```
 GET /api/v1/admin/request-logs?user_id=xxx&path=/api/v1/transfers&status=500
 Authorization: Bearer <admin-JWT>
 
 Filters:
-  - user_id         — muayyan foydalanuvchi
-  - path            — muayyan endpoint
+  - user_id         — specific user
+  - path            — specific endpoint
   - method          — GET, POST, PUT, DELETE
-  - status_code     — 200, 400, 500 va h.k.
-  - ip_address      — muayyan IP
-  - correlation_id  — bitta request zanjiri
-  - date_from/to    — vaqt oralig'i
-  - min_duration_ms — sekin so'rovlar (> 1000ms)
+  - status_code     — 200, 400, 500 etc.
+  - ip_address      — specific IP
+  - correlation_id  — single request chain
+  - date_from/to    — time range
+  - min_duration_ms — slow requests (> 1000ms)
 
 Response:
 {

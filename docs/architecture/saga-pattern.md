@@ -17,7 +17,7 @@ Step 10: Emit Events          → -
 
 ## Saga State Machine
 
-<!-- Transfer saga ning barcha holatlari va o'tishlari -->
+<!-- All states and transitions of the Transfer saga -->
 ```
                     ┌──────────┐
                     │  CREATED │
@@ -45,105 +45,105 @@ Step 10: Emit Events          → -
             │ │ │       │
             │ │ │       ▼
             │ │ │  ┌───────────┐
-            │ │ │  │ COMPLETED │ ← yakuniy holat
+            │ │ │  │ COMPLETED │ ← final state
             │ │ │  └───────────┘
             │ │ │
-            ▼ ▼ ▼       (har qanday step fail bo'lsa)
+            ▼ ▼ ▼       (if any step fails)
        ┌────────────┐
-       │COMPENSATING│ → teskari tartibda compensate
+       │COMPENSATING│ → compensate in reverse order
        └─────┬──────┘
              │
              ▼
        ┌──────────┐
-       │  FAILED  │ ← yakuniy holat
+       │  FAILED  │ ← final state
        └──────────┘
 ```
 
 ## Saga State Persistence
 
-<!-- Saga holati DB da saqlanadi — server crash bo'lsa ham davom ettirish mumkin -->
+<!-- Saga state is stored in DB — can resume even after server crash -->
 ```sql
 CREATE TABLE saga_state (
     id              UUID PRIMARY KEY,
     transfer_id     UUID NOT NULL UNIQUE,
-    current_step    INTEGER NOT NULL DEFAULT 0,    -- hozirgi step raqami
+    current_step    INTEGER NOT NULL DEFAULT 0,    -- current step number
     status          VARCHAR(20) NOT NULL,          -- CREATED, CHECKING, LOCKING, EXECUTING, COMPLETING, COMPENSATING, COMPLETED, FAILED
-    step_results    JSONB DEFAULT '{}',            -- har bir step natijasi
-    error           TEXT,                          -- xato xabari (agar bor bo'lsa)
+    step_results    JSONB DEFAULT '{}',            -- result of each step
+    error           TEXT,                          -- error message (if any)
     started_at      TIMESTAMPTZ DEFAULT NOW(),
     updated_at      TIMESTAMPTZ DEFAULT NOW(),
     completed_at    TIMESTAMPTZ
 );
 
--- Stuck saga larni topish uchun
+-- For finding stuck sagas
 CREATE INDEX idx_saga_active ON saga_state (status, updated_at)
     WHERE status NOT IN ('COMPLETED', 'FAILED');
 ```
 
 ### Saga Recovery (Server Crash)
 ```
-Server qayta ishga tushganda:
-  1. saga_state dan status != COMPLETED/FAILED larni yuklash
-  2. Har bir saga uchun:
-     a. current_step dan davom ettirish (idempotent bo'lgani uchun xavfsiz)
-     b. Agar timeout o'tgan bo'lsa → compensate
+When server restarts:
+  1. Load sagas from saga_state where status != COMPLETED/FAILED
+  2. For each saga:
+     a. Resume from current_step (safe because it's idempotent)
+     b. If timeout has passed → compensate
 ```
 
-## Compensatsiya
+## Compensation
 
-Agar Step 7 fail bo'lsa (teskari tartibda):
-1. Step 6 compensate: Refund Source — debit qilingan summani qaytarish
-2. Step 5 compensate: Unlock both — ikkala account lock ni ochish
-3. Step 4 compensate: (amal yo'q — faqat tekshiruv edi)
-4. Step 3 compensate: Unlock — source account lock ni ochish
+If Step 7 fails (in reverse order):
+1. Step 6 compensate: Refund Source — return the debited amount
+2. Step 5 compensate: Unlock both — release locks on both accounts
+3. Step 4 compensate: (no action — was only a check)
+4. Step 3 compensate: Unlock — release source account lock
 5. Transfer status = FAILED
 
-<!-- Har bir compensatsiya ham IDEMPOTENT bo'lishi kerak —
-     bir necha marta chaqirilsa ham bir xil natija berishi kerak -->
+<!-- Each compensation must also be IDEMPOTENT —
+     must produce the same result even if called multiple times -->
 
-## Timeout va Retry
+## Timeout and Retry
 
 ```
 Saga Timeout:
-  - Umumiy timeout: 30 sekund (barcha steplar uchun)
-  - Per-step timeout: 5 sekund
-  - Timeout bo'lsa → compensate boshlanadi
+  - Overall timeout: 30 seconds (for all steps)
+  - Per-step timeout: 5 seconds
+  - On timeout → compensation begins
 
-Retry Strategiyasi:
-  - Step fail bo'lsa → 3 marta retry (100ms → 200ms → 400ms)
-  - Barcha retry lar fail → compensate
-  - Retryable xatolar: network error, DB connection, serialization failure
+Retry Strategy:
+  - If step fails → 3 retries (100ms → 200ms → 400ms)
+  - If all retries fail → compensate
+  - Retryable errors: network error, DB connection, serialization failure
   - Not retryable: insufficient balance, account frozen, AML block
 ```
 
 ## Deadlock Prevention
 
-Account'larni UUID tartibida lock qilish:
+Locking accounts in UUID order:
 ```go
-// Doimo kichik UUID birinchi lock qilinadi
-// Bu barcha concurrent transfer lar bir xil tartibda lock qilishini ta'minlaydi
+// Always lock the smaller UUID first
+// This ensures all concurrent transfers lock in the same order
 if fromID > toID {
-    lock(toID)    // kichik UUID birinchi
-    lock(fromID)  // katta UUID keyin
+    lock(toID)    // smaller UUID first
+    lock(fromID)  // larger UUID second
 } else {
     lock(fromID)
     lock(toID)
 }
 ```
 
-## Monitoring va Alerting
+## Monitoring and Alerting
 
-<!-- Saga larni monitoring qilish uchun quyidagi metrikalar kuzatiladi -->
+<!-- The following metrics are tracked for monitoring sagas -->
 ```
-Prometheus Metrikalar:
-  - saga_duration_seconds        — saga bajarilish vaqti (histogram)
-  - saga_step_duration_seconds   — har bir step vaqti (histogram)
-  - saga_total                   — jami saga lar (counter, label: status)
-  - saga_compensation_total      — compensatsiya soni (counter)
-  - saga_active_count            — hozir faol saga lar soni (gauge)
+Prometheus Metrics:
+  - saga_duration_seconds        — saga execution time (histogram)
+  - saga_step_duration_seconds   — time per step (histogram)
+  - saga_total                   — total sagas (counter, label: status)
+  - saga_compensation_total      — number of compensations (counter)
+  - saga_active_count            — currently active sagas (gauge)
 
-Alert Qoidalari:
-  - saga_active_count > 100          → "Ko'p concurrent saga" alert
+Alert Rules:
+  - saga_active_count > 100          → "Too many concurrent sagas" alert
   - saga_duration_seconds > 30       → "Stuck saga" alert
-  - saga_compensation_total tez o'sish → "Ko'p transfer fail" alert
+  - saga_compensation_total rising fast → "Too many transfer failures" alert
 ```

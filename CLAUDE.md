@@ -1,8 +1,8 @@
-# XBank — Claude Code Yo'riqnomasi
+# XBank — Claude Code Guide
 
-## Loyiha Haqida
-XBank — Go (Fiber) + PostgreSQL asosida qurilgan banking application.
-DDD Modular Monolith arxitektura, Event Sourcing, CQRS, Saga pattern.
+## About the Project
+XBank — a banking application built on Go (Fiber) + PostgreSQL.
+DDD Modular Monolith architecture, Event Sourcing, CQRS, Saga pattern.
 
 ## Tech Stack
 - **Go 1.25+** (GoFiber v2, pgx v5)
@@ -12,7 +12,7 @@ DDD Modular Monolith arxitektura, Event Sourcing, CQRS, Saga pattern.
 - **HashiCorp Vault** (key management, E2EE)
 - **Docker + docker-compose**
 
-## Loyiha Strukturasi
+## Project Structure
 ```
 cmd/api/           → Entry point
 internal/
@@ -25,76 +25,76 @@ docs/              → Documentation
 proto/             → Protobuf definitions (Kafka messages)
 ```
 
-## Komandalar
+## Commands
 
-### Ishga tushirish
+### Running
 ```bash
-make run              # Lokal server
-make docker-up        # Docker bilan
-make docker-down      # Docker to'xtatish
+make run              # Local server
+make docker-up        # With Docker
+make docker-down      # Stop Docker
 make build            # Binary build
-make test             # Testlar
+make test             # Tests
 ```
 
-### Migratsiyalar (Goose)
+### Migrations (Goose)
 ```bash
-make migrate-up                     # Barcha migratsiyalarni qo'llash
-make migrate-down                   # Oxirgi migratsiyani qaytarish
-make migrate-status                 # Holat ko'rish
-make migrate-create name=add_cards  # Yangi migratsiya yaratish
-make migrate-reset                  # Barcha migratsiyalarni qaytarish
+make migrate-up                     # Apply all migrations
+make migrate-down                   # Rollback the last migration
+make migrate-status                 # View status
+make migrate-create name=add_cards  # Create a new migration
+make migrate-reset                  # Rollback all migrations
 ```
 
-### Goose o'rnatish
+### Installing Goose
 ```bash
 go install github.com/pressly/goose/v3/cmd/goose@latest
 ```
 
-## Arxitektura Qoidalari
+## Architecture Rules
 
 ### Domain Layer (`internal/domain/`)
 - **ZERO** external import (stdlib only)
-- Aggregate Root = tranzaksiya chegarasi
-- Domain event lar orqali holat o'zgarishi
+- Aggregate Root = transaction boundary
+- State changes through domain events
 - Specification pattern → business rules
 
 ### Application Layer (`internal/application/`)
-- CQRS: Command (write) va Query (read) ajratilgan
+- CQRS: Command (write) and Query (read) separated
 - Command → primary DB (SERIALIZABLE)
 - Query → read replica
 
 ### Infrastructure Layer (`internal/infrastructure/`)
 - Repository implementation (pgx)
-- Redis, Kafka, Vault integratsiya
+- Redis, Kafka, Vault integration
 - JWT, Crypto
 
 ### HTTP Layer (`internal/interfaces/http/`)
 - Fiber handlers
-- 14 ta middleware stack
+- 14-middleware stack
 - DTO validation
 
-## Migration Qoidalari
-- Goose format: `-- +goose Up` / `-- +goose Down` annotatsiyalar
-- Har doim **Down** migratsiya yozing (rollback uchun)
-- Fayl nomi: `NNN_description.sql` (NNN = tartib raqami)
-- Partitioned jadvallar uchun: parent + dastlabki partitsiya bitta faylda
+## Migration Rules
+- Goose format: `-- +goose Up` / `-- +goose Down` annotations
+- Always write a **Down** migration (for rollback)
+- File name: `NNN_description.sql` (NNN = sequence number)
+- For partitioned tables: parent + initial partition in one file
 
-## Security Qoidalari
-- PAN, PIN, CVV → **E2EE (ECIES)**: server plaintext ko'rmasin
-- Parol, PIN, CVV → **bcrypt** (hash, cost=12)
+## Security Rules
+- PAN, PIN, CVV → **E2EE (ECIES)**: server must not see plaintext
+- Password, PIN, CVV → **bcrypt** (hash, cost=12)
 - JWT → **ES256** (ECDSA P-256)
-- Sensitive data logga **HECH QACHON** plaintext yozilmasin
-- E2EE encrypted field lar logda `[E2EE_REDACTED]`
-- Authorization header logda `Bearer [REDACTED]`
+- Sensitive data must **NEVER** be written to logs as plaintext
+- E2EE encrypted fields in logs: `[E2EE_REDACTED]`
+- Authorization header in logs: `Bearer [REDACTED]`
 
-## Kafka Message Qoidalari
-- Message format: **Protobuf** (JSON emas)
+## Kafka Message Rules
+- Message format: **Protobuf** (not JSON)
 - Topic naming: `xbank.{domain}.{event}` (dot separator)
-- Partition key: `account_id` yoki `user_id` (ordering uchun)
-- Proto fayllar: `proto/` papkada
+- Partition key: `account_id` or `user_id` (for ordering)
+- Proto files: in `proto/` directory
 
-## Kodlash Standartlari
-- Go standart formatting (`gofmt`)
+## Coding Standards
+- Go standard formatting (`gofmt`)
 - Error handling: wrap with context (`fmt.Errorf("... : %w", err)`)
 - Naming: Go conventions (exported = PascalCase, unexported = camelCase)
 - Commit message: `type: description` (docs:, feat:, fix:, refactor:, test:)

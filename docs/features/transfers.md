@@ -1,10 +1,10 @@
 # Transfers
 
 ## Double-Entry Bookkeeping
-Har bir transfer = 2 ta ledger entry (debit + credit). `SUM(all entries) = 0` DOIMO.
+Every transfer = 2 ledger entries (debit + credit). `SUM(all entries) = 0` ALWAYS.
 
 ```sql
--- A dan B ga 100,000 so'm:
+-- From A to B, 100,000 so'm:
 INSERT INTO ledger_entries (transfer_id, account_id, side, amount_minor)
 VALUES
   ('txn_001', 'account_A', 'DEBIT',  100000),
@@ -16,10 +16,10 @@ VALUES
 ```
 INITIATED → PENDING → PROCESSING → COMPLETED
                                  → FAILED
-                                 → REVERSED (faqat COMPLETED dan)
+                                 → REVERSED (only from COMPLETED)
 ```
 
-Noto'g'ri o'tishlar cheklanadi:
+Invalid transitions are restricted:
 ```go
 func (s TransferStatus) CanTransitionTo(next TransferStatus) bool
 ```
@@ -39,58 +39,58 @@ Step 9:  Complete Transfer    → Compensate: Mark Failed
 Step 10: Emit Events          → -
 ```
 
-Agar har qanday step fail → compensate previous steps.
+If any step fails → compensate previous steps.
 
 ## Idempotency
 ```
 Client → POST /transfer {idempotency_key: "abc-123", amount: 50000}
 Server:
-  1. key bazada bormi? → HA → eski natijani qaytar
-  2. YO'Q → tranzaksiyani bajar, natijani saqla
+  1. Does key exist in DB? → YES → return previous result
+  2. NO → execute transaction, save result
 ```
-Agar tarmoq uzilsa va client qayta yubosa — pul IKKI MARTA yechilmaydi.
+If the network drops and the client retries — funds will NOT be deducted TWICE.
 
 ## Transaction Signing (ECDSA per-user)
 
-Har bir foydalanuvchi o'z **ECDSA P-256 private key** bilan transfer so'rovini imzolaydi.
-Server faqat **public key** bilan tekshiradi — private key hech qachon serverda bo'lmaydi.
+Each user signs the transfer request with their own **ECDSA P-256 private key**.
+The server only verifies with the **public key** — the private key is never on the server.
 
 ### Flow
 ```
-1. Client → payload yaratadi:
+1. Client → creates payload:
    payload = "idempotency_key|from|to|amount|currency|timestamp"
 
-2. Client → private key bilan imzolaydi:
+2. Client → signs with private key:
    signature = ECDSA_Sign(private_key, SHA256(payload))
 
-3. Client → so'rov yuboradi:
+3. Client → sends request:
    Header: X-Signature: base64(signature)
    Header: X-Signing-Key-ID: "key_uuid"
 
-4. Server → user_signing_keys dan public key oladi
+4. Server → retrieves public key from user_signing_keys
 5. Server → ECDSA_Verify(public_key, SHA256(payload), signature)
 ```
 
-### Nima uchun HMAC emas?
-- **HMAC**: shared secret — server buzilsa barcha userlar compromise
-- **ECDSA**: server faqat public key biladi — private key client da qoladi
+### Why not HMAC?
+- **HMAC**: shared secret — if server is compromised, all users are compromised
+- **ECDSA**: server only knows public key — private key stays on the client
 
-Batafsil: [Encryption & PKI](../security/encryption.md#transfer-signing-ecdsa-per-user)
+Details: [Encryption & PKI](../security/encryption.md#transfer-signing-ecdsa-per-user)
 
 ## Transaction Reversal
-Original tranzaksiya O'CHIRILMAYDI — teskari tranzaksiya yaratiladi:
+The original transaction is NOT DELETED — a reverse transaction is created:
 ```
 A → B: $100 (original, COMPLETED)
 B → A: $100 (reversal, reference = original_id)
-Ledger: 4 ta entry (2 original + 2 reversal)
+Ledger: 4 entries (2 original + 2 reversal)
 ```
 
 ## Scheduled Transactions
 ```sql
 frequency: 'ONCE', 'DAILY', 'WEEKLY', 'MONTHLY'
-next_run_at: keyingi bajarilish vaqti
+next_run_at: next execution time
 ```
-pg_cron yoki app-level scheduler har daqiqa tekshiradi.
+pg_cron or app-level scheduler checks every minute.
 
 ## Isolation Level: SERIALIZABLE
 ```sql
@@ -101,7 +101,7 @@ COMMIT;
 ```
 
 ## Deadlock Prevention
-Account'larni UUID tartibida lock qilish:
+Lock accounts in UUID order:
 ```go
 if fromID > toID { lock(toID); lock(fromID) }
 else { lock(fromID); lock(toID) }
@@ -115,4 +115,4 @@ else { lock(fromID); lock(toID) }
 | GET | `/api/v1/transfers/{id}` | Session |
 | GET | `/api/v1/accounts/{id}/transfers` | Session |
 
-*2FA faqat > $1000 transfer uchun
+*2FA only for transfers > $1000

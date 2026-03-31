@@ -3,23 +3,23 @@
 ## Apache Kafka
 
 <!-- Kafka — distributed event streaming platform.
-     Barcha async xabarlar Protobuf formatda serializatsiya qilinadi.
-     High throughput, durability, ordering garantiyasi.
-     Schema Registry orqali backward/forward compatibility. -->
+     All async messages are serialized in Protobuf format.
+     High throughput, durability, ordering guarantee.
+     Backward/forward compatibility via Schema Registry. -->
 
-### Sinxron (real-time, HTTP javob kutadi)
+### Synchronous (real-time, waits for HTTP response)
 - Balance check, login, 2FA verify
-- Transfer saga (barcha 10 step bitta request ichida)
+- Transfer saga (all 10 steps within a single request)
 
-### Asinxron (Kafka orqali, background processing)
-- Notification yuborish
-- Fraud analysis (chuqur tekshiruv, background)
+### Asynchronous (via Kafka, background processing)
+- Sending notifications
+- Fraud analysis (deep check, background)
 - Statement generation
 - Reconciliation
 - AML screening (batch)
 - Projection rebuild
 
-## Kafka Cluster Konfiguratsiya
+## Kafka Cluster Configuration
 
 ```yaml
 # docker-compose.yml (development)
@@ -29,7 +29,7 @@ kafka:
     KAFKA_BROKER_ID: 1
     KAFKA_NUM_PARTITIONS: 6
     KAFKA_DEFAULT_REPLICATION_FACTOR: 1          # dev=1, prod=3
-    KAFKA_LOG_RETENTION_HOURS: 168               # 7 kun
+    KAFKA_LOG_RETENTION_HOURS: 168               # 7 days
     KAFKA_LOG_SEGMENT_BYTES: 1073741824          # 1 GB
     KAFKA_MESSAGE_MAX_BYTES: 1048576             # 1 MB max message
     KAFKA_AUTO_CREATE_TOPICS_ENABLE: "false"     # manual topic creation
@@ -43,30 +43,30 @@ schema-registry:
 
 ## Topics
 
-<!-- Topic = Kafka'dagi xabar kanali.
-     Har bir topic — partition larga bo'lingan.
-     Partition ichida tartib (ordering) kafolatlanadi. -->
+<!-- Topic = message channel in Kafka.
+     Each topic is divided into partitions.
+     Ordering is guaranteed within a partition. -->
 
 ```
 xbank.transfers.created   → fraud (deep scan), notification, statement
 xbank.transfers.completed → analytics, reporting
-xbank.transfers.failed    → alert, retry (agar retryable bo'lsa)
+xbank.transfers.failed    → alert, retry (if retryable)
 xbank.users.kyc.updated   → compliance, account status update
 xbank.accounts.frozen     → notification, admin alert
 ```
 
-### Topic Konfiguratsiya
+### Topic Configuration
 
 | Topic | Partitions | Replication | Retention | Key |
 |---|---|---|---|---|
-| `xbank.transfers.created` | 6 | 3 | 7 kun | `account_id` |
-| `xbank.transfers.completed` | 3 | 3 | 30 kun | `transfer_id` |
-| `xbank.transfers.failed` | 3 | 3 | 30 kun | `transfer_id` |
-| `xbank.users.kyc.updated` | 3 | 3 | 30 kun | `user_id` |
-| `xbank.accounts.frozen` | 3 | 3 | 30 kun | `account_id` |
+| `xbank.transfers.created` | 6 | 3 | 7 days | `account_id` |
+| `xbank.transfers.completed` | 3 | 3 | 30 days | `transfer_id` |
+| `xbank.transfers.failed` | 3 | 3 | 30 days | `transfer_id` |
+| `xbank.users.kyc.updated` | 3 | 3 | 30 days | `user_id` |
+| `xbank.accounts.frozen` | 3 | 3 | 30 days | `account_id` |
 
 ```bash
-# Topic yaratish (manual)
+# Create topic (manual)
 kafka-topics --create --topic xbank.transfers.created \
   --partitions 6 --replication-factor 3 \
   --config retention.ms=604800000 \
@@ -76,16 +76,16 @@ kafka-topics --create --topic xbank.transfers.created \
 
 ## Protocol Buffers (Protobuf) — Message Format
 
-<!-- Protobuf — Google tomonidan yaratilgan binary serialization format.
-     JSON dan 3-10x kichikroq, 20-100x tezroq parse.
-     Schema Registry orqali versioning va compatibility tekshiruvi. -->
+<!-- Protobuf — binary serialization format created by Google.
+     3-10x smaller than JSON, 20-100x faster to parse.
+     Versioning and compatibility checking via Schema Registry. -->
 
-### Proto Fayllar Strukturasi
+### Proto File Structure
 
 ```
 proto/
 ├── common/
-│   └── metadata.proto         # Umumiy metadata (correlation_id, timestamp)
+│   └── metadata.proto         # Common metadata (correlation_id, timestamp)
 ├── transfers/
 │   ├── transfer_created.proto
 │   ├── transfer_completed.proto
@@ -96,7 +96,7 @@ proto/
     └── account_frozen.proto
 ```
 
-### Umumiy Metadata
+### Common Metadata
 
 ```protobuf
 // proto/common/metadata.proto
@@ -107,12 +107,12 @@ option go_package = "github.com/BakhodiribnYashinibnMansur/XBank/pkg/proto/commo
 import "google/protobuf/timestamp.proto";
 
 message EventMetadata {
-  string event_id       = 1;   // UUID — har bir xabar uchun unikal
-  string correlation_id = 2;   // Request tracing uchun
-  string user_id        = 3;   // Kim trigger qildi
+  string event_id       = 1;   // UUID — unique for each message
+  string correlation_id = 2;   // For request tracing
+  string user_id        = 3;   // Who triggered it
   google.protobuf.Timestamp timestamp = 4;
-  int32 retry_count     = 5;   // Necha marta qayta urinildi
-  string source         = 6;   // Qaysi service dan keldi (e.g. "transfer-service")
+  int32 retry_count     = 5;   // How many times retried
+  string source         = 6;   // Which service it came from (e.g. "transfer-service")
 }
 ```
 
@@ -138,9 +138,9 @@ message TransferCreated {
 
   enum TransferType {
     TRANSFER_TYPE_UNSPECIFIED = 0;
-    TRANSFER_TYPE_INTERNAL    = 1;  // Bank ichida
-    TRANSFER_TYPE_EXTERNAL    = 2;  // Boshqa bank
-    TRANSFER_TYPE_SCHEDULED   = 3;  // Rejalashtirilgan
+    TRANSFER_TYPE_INTERNAL    = 1;  // Within the bank
+    TRANSFER_TYPE_EXTERNAL    = 2;  // Another bank
+    TRANSFER_TYPE_SCHEDULED   = 3;  // Scheduled
   }
 }
 ```
@@ -252,7 +252,7 @@ message AccountFrozen {
   string account_id  = 2;
   string user_id     = 3;
   FreezeReason reason = 4;
-  string description  = 5;   // Admin izoh
+  string description  = 5;   // Admin note
 
   enum FreezeReason {
     FREEZE_REASON_UNSPECIFIED   = 0;
@@ -265,13 +265,13 @@ message AccountFrozen {
 }
 ```
 
-## Go Protobuf Generatsiya
+## Go Protobuf Generation
 
 ```bash
-# protoc o'rnatish va Go plugin
+# Install protoc and Go plugin
 go install google.golang.org/protobuf/cmd/protoc-gen-go@latest
 
-# Barcha proto fayllarni kompilatsiya qilish
+# Compile all proto files
 protoc --go_out=. --go_opt=paths=source_relative \
   proto/common/*.proto \
   proto/transfers/*.proto \
@@ -288,13 +288,13 @@ proto:
 
 ## Consumer Groups
 
-<!-- Kafka Consumer Group — bir nechta consumer bitta topic'ni parallel o'qishi.
-     Har bir partition faqat BITTA consumer ga tayinlanadi (group ichida).
-     Partition soni >= consumer soni bo'lishi kerak. -->
+<!-- Kafka Consumer Group — multiple consumers reading a single topic in parallel.
+     Each partition is assigned to ONLY ONE consumer (within the group).
+     Number of partitions must be >= number of consumers. -->
 
-### Consumer Group Konfiguratsiya
+### Consumer Group Configuration
 
-| Topic | Consumer Group | Consumers | Maqsad |
+| Topic | Consumer Group | Consumers | Purpose |
 |---|---|---|---|
 | `xbank.transfers.created` | `fraud-group` | 2 | Fraud deep analysis |
 | `xbank.transfers.created` | `notification-group` | 1 | SSE notification |
@@ -303,7 +303,7 @@ proto:
 | `xbank.users.kyc.updated` | `compliance-group` | 1 | KYC status sync |
 | `xbank.accounts.frozen` | `notification-group` | 1 | User/Admin notification |
 
-### Consumer Konfiguratsiya (Go)
+### Consumer Configuration (Go)
 
 ```go
 // Kafka consumer config
@@ -311,43 +311,43 @@ config := kafka.ReaderConfig{
     Brokers:        []string{"kafka:9092"},
     GroupID:        "fraud-group",
     Topic:          "xbank.transfers.created",
-    MinBytes:       1,              // 1 byte — darhol o'qish
+    MinBytes:       1,              // 1 byte — read immediately
     MaxBytes:       10e6,           // 10 MB max batch
-    CommitInterval: time.Second,    // Offset commit intervali
+    CommitInterval: time.Second,    // Offset commit interval
     StartOffset:    kafka.LastOffset,
     MaxWait:        3 * time.Second,
 }
 ```
 
-## Message Ordering Kafolatlari
+## Message Ordering Guarantees
 
-<!-- Kafka partition ichida strict ordering kafolatlaydi.
-     Key bo'yicha partitioning — bitta account uchun barcha eventlar
-     bitta partition ga tushadi → tartib buzilmaydi. -->
+<!-- Kafka guarantees strict ordering within a partition.
+     Partitioning by key — all events for a single account
+     go to the same partition → order is preserved. -->
 
 ```
-Kafolatlar:
-  - Partition ichida — strict FIFO tartib
-  - Key = account_id → bitta account uchun eventlar doimo tartibda
-  - Turli partition lar o'rtasida — tartib kafolatlanmaydi
-  - Consumer group ichida — har bir partition FAQAT bitta consumer ga
+Guarantees:
+  - Within a partition — strict FIFO order
+  - Key = account_id → events for a single account are always in order
+  - Between different partitions — order is NOT guaranteed
+  - Within a consumer group — each partition goes to ONLY one consumer
 
-Muhim: Transfer eventlari key = account_id bilan yuboriladi,
-       shuning uchun bitta account uchun eventlar DOIMO tartibda.
-       Turli account lar uchun eventlar parallel (turli partition larda).
+Important: Transfer events are sent with key = account_id,
+           so events for a single account are ALWAYS in order.
+           Events for different accounts are parallel (in different partitions).
 ```
 
-### Partitioning Strategiya
+### Partitioning Strategy
 
 ```go
-// Producer — key bo'yicha partition tanlash
+// Producer — select partition by key
 writer := kafka.Writer{
     Addr:     kafka.TCP("kafka:9092"),
     Topic:    "xbank.transfers.created",
     Balancer: &kafka.Murmur2Balancer{}, // Kafka default partitioner
 }
 
-// Xabar yuborish
+// Send message
 msg := kafka.Message{
     Key:   []byte(accountID),  // account_id → partition key
     Value: protoBytes,         // Protobuf serialized
@@ -359,39 +359,39 @@ msg := kafka.Message{
 err := writer.WriteMessages(ctx, msg)
 ```
 
-## Retry Mexanizmi
+## Retry Mechanism
 
 ```
-Consumer xabarni o'qidi → deserialize (Protobuf) → ishlash → FAIL
+Consumer reads message → deserialize (Protobuf) → process → FAIL
 
 Retry policy (exponential backoff):
-  1-chi urinish:  1 sekund kutish   → qayta ishlash
-  2-chi urinish:  5 sekund kutish   → qayta ishlash
-  3-chi urinish:  30 sekund kutish  → qayta ishlash
-  4-chi urinish:  → DLQ topic ga yuborish (manual review)
+  1st attempt:  wait 1 second   → reprocess
+  2nd attempt:  wait 5 seconds  → reprocess
+  3rd attempt:  wait 30 seconds → reprocess
+  4th attempt:  → send to DLQ topic (manual review)
 
 Go pseudocode:
   for attempt := 1; attempt <= 3; attempt++ {
       event := &transfers.TransferCreated{}
       if err := proto.Unmarshal(msg.Value, event); err != nil {
-          moveToDLQ(msg, err)  // deserialize fail → darhol DLQ
+          moveToDLQ(msg, err)  // deserialize fail → immediately to DLQ
           return
       }
       err := processEvent(ctx, event)
       if err == nil {
-          reader.CommitMessages(ctx, msg)  // muvaffaqiyat → offset commit
+          reader.CommitMessages(ctx, msg)  // success → offset commit
           return
       }
       event.Metadata.RetryCount++
       sleep(retryDelay[attempt])  // 1s, 5s, 30s
   }
-  moveToDLQ(msg, lastError)  // 3 marta fail → DLQ
+  moveToDLQ(msg, lastError)  // 3 failures → DLQ
 ```
 
 ### Retry Topic Pattern
 
 ```
-Asosiy flow:
+Main flow:
   xbank.transfers.created
       │
       ├── Success → commit offset
@@ -403,9 +403,9 @@ Asosiy flow:
 
 ## Dead Letter Queue (DLQ)
 
-<!-- DLQ — Kafka'da alohida topic + PostgreSQL jadval.
-     3 marta retry dan keyin fail bo'lgan xabarlar shu yerga tushadi.
-     HECH QACHON avtomatik o'chirilmaydi — admin manual ko'rib chiqadi. -->
+<!-- DLQ — a separate topic in Kafka + PostgreSQL table.
+     Messages that fail after 3 retries end up here.
+     NEVER automatically deleted — admin reviews manually. -->
 
 ### DLQ Kafka Topic
 
@@ -415,41 +415,41 @@ Partitions: 1
 Retention: unlimited (cleanup.policy=compact)
 ```
 
-### DLQ PostgreSQL Jadvali (Audit + Admin Panel uchun)
+### DLQ PostgreSQL Table (For Audit + Admin Panel)
 
 ```sql
 CREATE TABLE dead_letter_queue (
     id            UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    topic         VARCHAR(100) NOT NULL,         -- qaysi topic dan kelgan
+    topic         VARCHAR(100) NOT NULL,         -- which topic it came from
     partition_id  INTEGER NOT NULL,              -- Kafka partition
     offset_id     BIGINT NOT NULL,               -- Kafka offset
     key           BYTEA,                          -- Kafka message key
-    payload       BYTEA NOT NULL,                -- Protobuf binary (original xabar)
-    payload_json  JSONB,                          -- Debug uchun JSON representation
-    error         TEXT NOT NULL,                 -- oxirgi xato xabari
-    retries       INTEGER DEFAULT 0,             -- necha marta urinildi
+    payload       BYTEA NOT NULL,                -- Protobuf binary (original message)
+    payload_json  JSONB,                          -- JSON representation for debugging
+    error         TEXT NOT NULL,                 -- last error message
+    retries       INTEGER DEFAULT 0,             -- how many times attempted
     max_retries   INTEGER DEFAULT 3,
     status        VARCHAR(20) DEFAULT 'PENDING', -- PENDING, REPROCESSED, DISCARDED
     created_at    TIMESTAMPTZ DEFAULT NOW(),
-    processed_at  TIMESTAMPTZ                    -- admin qayta ishlagan vaqt
+    processed_at  TIMESTAMPTZ                    -- time when admin reprocessed
 );
 
 CREATE INDEX idx_dlq_status ON dead_letter_queue (status, created_at);
 CREATE INDEX idx_dlq_topic ON dead_letter_queue (topic, created_at);
 ```
 
-### DLQ Ishlash Jarayoni
+### DLQ Processing Workflow
 
 ```
-1. Admin panel → DLQ ro'yxatini ko'rish
-2. Har bir xabar uchun: topic, payload (JSON view), error, retry soni
-3. Admin tanlov:
-   a. "Qayta ishlash" → xabarni qayta Kafka topic ga yuborish
-   b. "Bekor qilish"  → status = DISCARDED (sababini yozish)
-4. Audit log ga qayd qilish
+1. Admin panel → view DLQ list
+2. For each message: topic, payload (JSON view), error, retry count
+3. Admin choice:
+   a. "Reprocess" → send message back to the Kafka topic
+   b. "Discard"   → status = DISCARDED (record the reason)
+4. Record in audit log
 ```
 
-## Producer/Consumer Arxitekturasi
+## Producer/Consumer Architecture
 
 ```
 Application Layer (after commit)
@@ -480,73 +480,73 @@ Application Layer (after commit)
 
 ## Monitoring
 
-<!-- Consumer lag va DLQ ni kuzatish juda muhim.
-     Kafka JMX metrikalarini Prometheus orqali yig'ish. -->
+<!-- Monitoring consumer lag and DLQ is very important.
+     Collecting Kafka JMX metrics via Prometheus. -->
 
 ```
-Prometheus Metrikalar:
+Prometheus Metrics:
   # Kafka Broker
-  - kafka_server_broker_topic_metrics_messages_in_total    — topic ga kelgan xabar soni
-  - kafka_server_broker_topic_metrics_bytes_in_total       — topic ga kelgan byte soni
+  - kafka_server_broker_topic_metrics_messages_in_total    — number of messages received by topic
+  - kafka_server_broker_topic_metrics_bytes_in_total       — number of bytes received by topic
 
-  # Consumer Lag (eng muhim!)
-  - kafka_consumer_group_lag                              — consumer qancha orqada (gauge)
-  - kafka_consumer_group_current_offset                   — hozirgi o'qilgan offset
+  # Consumer Lag (most important!)
+  - kafka_consumer_group_lag                              — how far behind the consumer is (gauge)
+  - kafka_consumer_group_current_offset                   — current read offset
 
   # Application Level
-  - xbank_message_processing_duration_seconds             — xabar ishlash vaqti (histogram)
-  - xbank_message_processing_errors_total                 — xato soni (counter)
-  - xbank_message_produced_total                          — yuborilgan xabar soni (counter)
-  - xbank_message_consumed_total                          — o'qilgan xabar soni (counter)
-  - xbank_dlq_count                                       — DLQ dagi xabar soni (gauge)
-  - xbank_protobuf_unmarshal_errors_total                 — deserialize xatolari (counter)
+  - xbank_message_processing_duration_seconds             — message processing time (histogram)
+  - xbank_message_processing_errors_total                 — error count (counter)
+  - xbank_message_produced_total                          — number of messages sent (counter)
+  - xbank_message_consumed_total                          — number of messages read (counter)
+  - xbank_dlq_count                                       — number of messages in DLQ (gauge)
+  - xbank_protobuf_unmarshal_errors_total                 — deserialization errors (counter)
 
-Alert Qoidalari:
-  - consumer_group_lag > 1000          → "Consumer orqada qoldi" alert
-  - dlq_count > 10                     → "DLQ to'lmoqda" alert
-  - processing_duration_p99 > 5s       → "Sekin processing" alert
+Alert Rules:
+  - consumer_group_lag > 1000          → "Consumer falling behind" alert
+  - dlq_count > 10                     → "DLQ filling up" alert
+  - processing_duration_p99 > 5s       → "Slow processing" alert
   - protobuf_unmarshal_errors > 0      → "Schema mismatch" alert
-  - kafka_under_replicated_partitions  → "Replication muammo" alert
+  - kafka_under_replicated_partitions  → "Replication issue" alert
 ```
 
 ## Schema Evolution (Protobuf Versioning)
 
-<!-- Protobuf backward compatibility qoidalari:
-     - Yangi field qo'shish — OK (eski consumer ignore qiladi)
-     - Field o'chirish — XAVFLI (eski consumer crash bo'lishi mumkin)
-     - Field type o'zgartirish — MAN ETILADI -->
+<!-- Protobuf backward compatibility rules:
+     - Adding a new field — OK (old consumer ignores it)
+     - Removing a field — DANGEROUS (old consumer may crash)
+     - Changing field type — PROHIBITED -->
 
 ```
-Qoidalar:
-  1. Yangi field qo'shish                    → ✅ Xavfsiz (backward compatible)
-  2. Field raqamini qayta ishlatmaslik        → ✅ Majburiy (reserved keyword)
-  3. Field type o'zgartirmaslik               → ❌ Breaking change
-  4. Enum ga yangi qiymat qo'shish           → ✅ Xavfsiz (UNSPECIFIED = 0 bo'lsa)
-  5. Field o'chirish o'rniga reserved qilish  → ✅ To'g'ri usul
+Rules:
+  1. Adding a new field                     → OK (backward compatible)
+  2. Not reusing field numbers              → Mandatory (reserved keyword)
+  3. Not changing field type                → Breaking change
+  4. Adding a new value to enum             → OK (if UNSPECIFIED = 0)
+  5. Using reserved instead of deleting     → Correct approach
 
-Misol — field olib tashlash:
+Example — removing a field:
   message TransferCreated {
-    reserved 8;              // eski field raqami — qayta ishlatmaslik
-    reserved "old_field";    // eski field nomi
+    reserved 8;              // old field number — do not reuse
+    reserved "old_field";    // old field name
     ...
   }
 ```
 
 ## Kafka vs Redis Streams
 
-| Xususiyat | Kafka | Redis Streams |
+| Feature | Kafka | Redis Streams |
 |---|---|---|
 | **Durability** | Disk-based, replication | In-memory + AOF |
-| **Throughput** | Millionlab msg/sec | O'rtacha |
-| **Ordering** | Partition ichida strict | Stream ichida strict |
-| **Retention** | Konfiguratsiya mumkin (kunlar/hafta) | Memory limit |
-| **Consumer Groups** | ✅ Native | ✅ Native |
-| **Schema Registry** | ✅ Protobuf/Avro/JSON | ❌ Yo'q |
-| **Replay** | ✅ Offset dan qayta o'qish | ⚠️ Cheklangan |
-| **Scalability** | Horizontal (broker qo'shish) | Vertical |
+| **Throughput** | Millions of msg/sec | Medium |
+| **Ordering** | Strict within partition | Strict within stream |
+| **Retention** | Configurable (days/weeks) | Memory limit |
+| **Consumer Groups** | Native | Native |
+| **Schema Registry** | Protobuf/Avro/JSON | None |
+| **Replay** | Re-read from offset | Limited |
+| **Scalability** | Horizontal (add brokers) | Vertical |
 | **Monitoring** | JMX + Kafka UI + Grafana | Redis CLI |
 
-**Tanlash sababi:** Banking tizimda durability, schema evolution, va message replay muhim — Kafka mos keladi.
+**Reason for choosing:** In a banking system, durability, schema evolution, and message replay are important — Kafka is a good fit.
 
 ## Go Dependencies
 
@@ -557,6 +557,6 @@ go get github.com/segmentio/kafka-go
 # Protobuf
 go get google.golang.org/protobuf
 
-# Schema registry (optional, production uchun)
+# Schema registry (optional, for production)
 go get github.com/riferrei/srclient
 ```

@@ -8,8 +8,8 @@ type Currency struct {
 }
 ```
 
-<!-- ISO 4217 standartiga muvofiq har bir valyuta uchun
-     minor unit (tiyin, cent) soni belgilanadi -->
+<!-- According to the ISO 4217 standard, the number of
+     minor units (tiyin, cent) is defined for each currency -->
 
 ## Money Value Object (Immutable)
 ```go
@@ -17,27 +17,27 @@ type Money struct {
     amount   *big.Int  // minor units (tiyin/cent)
     currency Currency
 }
-// HECH QACHON float!
+// NEVER float!
 // 100,000.50 so'm = 10000050 (tiyin)
 // $99.99 = 9999 (cent)
 // Banker's Rounding (HALF_EVEN)
 ```
 
-### Banker's Rounding Misollari
-<!-- HALF_EVEN — 0.5 bo'lganda eng yaqin juft songa yaxlitlash.
-     Bu moliyaviy hisob-kitoblarda standart, chunki bias (og'ish) kamaytiradi. -->
+### Banker's Rounding Examples
+<!-- HALF_EVEN — when the value is 0.5, round to the nearest even number.
+     This is the standard in financial calculations because it reduces bias. -->
 ```
-Oddiy yaxlitlash:           Banker's Rounding (HALF_EVEN):
-  2.5 → 3                     2.5 → 2  (2 juft, pastga)
-  3.5 → 4                     3.5 → 4  (4 juft, yuqoriga)
-  4.5 → 5                     4.5 → 4  (4 juft, pastga)
-  5.5 → 6                     5.5 → 6  (6 juft, yuqoriga)
-  2.3 → 2                     2.3 → 2  (oddiy, farq yo'q)
-  2.7 → 3                     2.7 → 3  (oddiy, farq yo'q)
+Standard rounding:             Banker's Rounding (HALF_EVEN):
+  2.5 → 3                       2.5 → 2  (2 is even, round down)
+  3.5 → 4                       3.5 → 4  (4 is even, round up)
+  4.5 → 5                       4.5 → 4  (4 is even, round down)
+  5.5 → 6                       5.5 → 6  (6 is even, round up)
+  2.3 → 2                       2.3 → 2  (normal, no difference)
+  2.7 → 3                       2.7 → 3  (normal, no difference)
 
-Amaliy misol (valyuta konvertatsiya):
-  $100 * kurs 12,750.5 UZS = 1,275,050 tiyin
-  Agar 0.5 tiyin qoldiq bo'lsa → juft songa yaxlitlash
+Practical example (currency conversion):
+  $100 * rate 12,750.5 UZS = 1,275,050 tiyin
+  If there is a 0.5 tiyin remainder → round to the nearest even number
 ```
 
 ## Exchange Rate Aggregate
@@ -46,83 +46,83 @@ type ExchangeRate struct {
     AggregateRoot
     Pair      CurrencyPair  // USD/UZS
     Rate      RateValue     // rate * 1000000 (6 decimal precision)
-    Spread    RateValue     // bank spread/markup (oldi-sotdi farqi)
-    BuyRate   RateValue     // sotib olish kursi (bank sotadi)
-    SellRate  RateValue     // sotish kursi (bank sotib oladi)
-    ValidFrom time.Time     // kurs boshlanish vaqti
-    ValidTo   time.Time     // kurs amal qilish muddati
-    Source    string        // kurs manbai ("CBU", "MANUAL", "API")
+    Spread    RateValue     // bank spread/markup (buy-sell difference)
+    BuyRate   RateValue     // buy rate (bank sells)
+    SellRate  RateValue     // sell rate (bank buys)
+    ValidFrom time.Time     // rate start time
+    ValidTo   time.Time     // rate validity period
+    Source    string        // rate source ("CBU", "MANUAL", "API")
 }
 ```
 
-## Kurs Manbai
+## Rate Source
 
-<!-- Kurslar quyidagi manbalardan olinadi -->
+<!-- Rates are obtained from the following sources -->
 ```
-1. CBU (Markaziy bank) API — rasmiy kurs, kun boshida yangilanadi
-2. Manual kirish — admin panel orqali maxsus kurs belgilash
-3. Tashqi API — real-time kurslar (kelajakda)
+1. CBU (Central Bank) API — official rate, updated at the start of the day
+2. Manual entry — setting a custom rate via the admin panel
+3. External API — real-time rates (in the future)
 
-Yangilanish tartibi:
-  - CBU kurs har kuni 09:00 da avtomatik yuklanadi
-  - Admin istalgan vaqtda manual kurs qo'yishi mumkin
-  - Manual kurs CBU kursdan ustunlik oladi
+Update schedule:
+  - CBU rate is loaded automatically every day at 09:00
+  - Admin can set a manual rate at any time
+  - Manual rate takes priority over CBU rate
 ```
 
-## Rate Locking (Kurs qulflash)
+## Rate Locking
 
-<!-- Transfer vaqtida kurs o'zgarishi mumkin.
-     Shuning uchun kurs transfer boshlanishida qulflanadi. -->
+<!-- The rate may change during a transfer.
+     Therefore, the rate is locked when the transfer begins. -->
 ```
 Transfer Flow:
-  1. Foydalanuvchi transfer boshlaydi (USD → UZS)
-  2. Server joriy kursni oladi va 2 daqiqaga qulflaydi
-  3. Foydalanuvchiga qulflangan kurs ko'rsatiladi
-  4. Foydalanuvchi tasdiqlaydi → transfer shu kurs bilan bajariladi
-  5. Agar 2 daqiqa ichida tasdiqlamasa → kurs lock muddati tugaydi
+  1. User initiates a transfer (USD → UZS)
+  2. Server retrieves the current rate and locks it for 2 minutes
+  3. The locked rate is displayed to the user
+  4. User confirms → transfer is executed at this rate
+  5. If not confirmed within 2 minutes → rate lock expires
 
-Rate Lock jadvali:
+Rate Lock table:
   rate_lock_id    UUID
   pair            VARCHAR(7)     -- "USD/UZS"
-  locked_rate     BIGINT         -- qulflangan kurs
+  locked_rate     BIGINT         -- locked rate
   user_id         UUID
-  expires_at      TIMESTAMPTZ    -- 2 daqiqadan keyin
-  used            BOOLEAN        -- transfer da ishlatildimi
+  expires_at      TIMESTAMPTZ    -- after 2 minutes
+  used            BOOLEAN        -- whether used in a transfer
 ```
 
-## FX Spread (Oldi-sotdi farqi)
+## FX Spread (Buy-Sell Difference)
 
 ```
-Misol:
-  CBU rasmiy kurs:  1 USD = 12,750 UZS
-  Bank buy rate:    1 USD = 12,700 UZS  (bank sotib oladi)
-  Bank sell rate:   1 USD = 12,800 UZS  (bank sotadi)
-  Spread:           100 UZS (0.78%)
+Example:
+  CBU official rate: 1 USD = 12,750 UZS
+  Bank buy rate:     1 USD = 12,700 UZS  (bank buys)
+  Bank sell rate:    1 USD = 12,800 UZS  (bank sells)
+  Spread:            100 UZS (0.78%)
 
-Foydalanuvchi transfer qilganda:
-  - USD → UZS: sell rate ishlatiladi (12,800)
-  - UZS → USD: buy rate ishlatiladi (12,700)
+When the user makes a transfer:
+  - USD → UZS: sell rate is used (12,800)
+  - UZS → USD: buy rate is used (12,700)
 ```
 
 ## Stale Rate Handling
 
-<!-- Agar cache dagi kurs eskirgan bo'lsa -->
+<!-- If the cached rate is stale -->
 ```
-Qoidalar:
-  - Redis cache: 5 min TTL (oddiy ko'rish uchun)
-  - Transfer uchun: DOIMO DB dan yangi kurs olish (cache emas!)
-  - Agar DB dagi kurs 24 soatdan eski bo'lsa:
-    → Transfer BLOCK qilinadi
-    → Admin alert yuboriladi
-    → "Kurs yangilanmagan" xato xabari
+Rules:
+  - Redis cache: 5 min TTL (for regular viewing)
+  - For transfers: ALWAYS get a fresh rate from the DB (not cache!)
+  - If the DB rate is older than 24 hours:
+    → Transfer is BLOCKed
+    → Admin alert is sent
+    → "Rate not updated" error message
 ```
 
 ## API
 
-| Method | Endpoint | Middleware | Tavsif |
+| Method | Endpoint | Middleware | Description |
 |---|---|---|---|
-| GET | `/api/v1/currencies` | Public | Qo'llab-quvvatlanadigan valyutalar |
-| GET | `/api/v1/currencies/rates?from=USD&to=UZS` | Public | Joriy kurs (cached) |
-| POST | `/api/v1/currencies/rate-lock` | Session | Transfer uchun kurs qulflash |
+| GET | `/api/v1/currencies` | Public | Supported currencies |
+| GET | `/api/v1/currencies/rates?from=USD&to=UZS` | Public | Current rate (cached) |
+| POST | `/api/v1/currencies/rate-lock` | Session | Lock rate for transfer |
 
-Redis cache: 5 min TTL (faqat GET /rates uchun, transfer uchun emas).
+Redis cache: 5 min TTL (only for GET /rates, not for transfers).

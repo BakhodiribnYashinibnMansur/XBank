@@ -1,4 +1,4 @@
-# Frontend Ishlash Flow (Test UI)
+# Frontend Operation Flow (Test UI)
 
 ## Tech
 - Vanilla HTML/JS + Tailwind CDN
@@ -8,20 +8,20 @@
 ## Security
 ```
 CSP headers:        Content-Security-Policy: default-src 'self'
-CSRF token:         Har bir POST/PUT/DELETE formda
+CSRF token:         Included in every POST/PUT/DELETE form
 Session timeout:    15 min inactivity → auto logout
 PAN masking:        **** **** **** 1234
-Clipboard block:    Card number nusxalanmaydi
+Clipboard block:    Card number cannot be copied
 Screen protection:  Sensitive fields: user-select: none + overlay
-localStorage:       Faqat access_token (test uchun)
-                    Card number, CVV HECH QACHON saqlanmaydi
+localStorage:       Only access_token (for testing)
+                    Card number, CVV are NEVER stored
 ```
 
-## UX Standartlari
+## UX Standards
 - WCAG 2.1 accessibility (aria-labels, keyboard nav, color contrast)
-- Responsive (mobil + desktop)
+- Responsive (mobile + desktop)
 - Skeleton loading
-- Tushunarli xato xabarlari
+- Clear error messages
 - Transaction confirmation modal
 
 ## Pages Flow
@@ -30,15 +30,15 @@ localStorage:       Faqat access_token (test uchun)
 ┌─────────────────────────────────────────────┐
 │                  LOGIN                       │
 │  email + password                            │
-│  ├── 2FA yoqilgan? → TOTP code input        │
+│  ├── 2FA enabled? → TOTP code input         │
 │  └── Success → Dashboard                    │
 └─────────────────────────────────────────────┘
           │
           ▼
 ┌─────────────────────────────────────────────┐
 │              DASHBOARD                       │
-│  - Barcha accountlar + balanslar             │
-│  - Oxirgi 5 tranzaksiya                     │
+│  - All accounts + balances                   │
+│  - Last 5 transactions                       │
 │  - Real-time notifications (SSE)             │
 │  - Quick transfer button                     │
 └─────────────────────────────────────────────┘
@@ -49,60 +49,60 @@ localStorage:       Faqat access_token (test uchun)
 
 ### Login Flow
 ```
-1. User email + password kiritadi
+1. User enters email + password
 2. POST /api/v1/auth/login
-3. 2FA yoqilgan? → TOTP code input → POST /api/v1/auth/2fa/verify
+3. 2FA enabled? → TOTP code input → POST /api/v1/auth/2fa/verify
 4. Response: {access_token, refresh_token}
-5. access_token → localStorage (test uchun)
+5. access_token → localStorage (for testing)
 6. Redirect → Dashboard
 ```
 
 ### Transfer Flow (UI)
 ```
-1. Transfer sahifasiga o'tish
-2. Beneficiary tanlash (dropdown)
-3. Summa va valyuta kiritish
-4. Komissiya ko'rsatiladi (transparency)
-5. "Tasdiqlash" tugmasi → Confirmation Modal
-6. Agar > $1000 → TOTP code so'raladi
+1. Navigate to Transfer page
+2. Select beneficiary (dropdown)
+3. Enter amount and currency
+4. Commission is displayed (transparency)
+5. "Confirm" button → Confirmation Modal
+6. If > $1000 → TOTP code is requested
 7. POST /api/v1/transfers (Idempotency-Key + X-Signature header)
 8. Loading spinner
-9. Success → "Transfer muvaffaqiyatli!" + notification
-10. Balans real-time yangilanadi (SSE event)
+9. Success → "Transfer successful!" + notification
+10. Balance updates in real-time (SSE event)
 ```
 
 ### Card Issue Flow (UI)
 ```
-1. Cards sahifasi → "Yangi karta" tugmasi
-2. Account tanlash, karta turi (DEBIT/VIRTUAL)
-3. 2FA tasdiqlash (TOTP code)
+1. Cards page → "New card" button
+2. Select account, card type (DEBIT/VIRTUAL)
+3. 2FA confirmation (TOTP code)
 4. POST /api/v1/cards
-5. Karta yaratildi → masked number ko'rsatiladi
-6. "Aktivatsiya" tugmasi → POST /activate
+5. Card created → masked number is displayed
+6. "Activate" button → POST /activate
 ```
 
 ### Real-Time Notifications (SSE)
-<!-- MUHIM: EventSource API custom headers qo'llab-quvvatlamaydi.
-     Shuning uchun auth uchun query parameter yoki cookie-based auth ishlatiladi.
-     Agar custom headers kerak bo'lsa, fetch-based SSE polyfill ishlatish mumkin. -->
+<!-- IMPORTANT: EventSource API does not support custom headers.
+     Therefore, query parameter or cookie-based auth is used for authentication.
+     If custom headers are needed, a fetch-based SSE polyfill can be used. -->
 ```javascript
-// Variant 1: Query parameter orqali auth (sodda)
+// Option 1: Auth via query parameter (simple)
 const eventSource = new EventSource('/api/v1/notifications/stream?token=' + token);
 
-// Variant 2: Cookie-based auth (xavfsizroq, production uchun tavsiya)
-// Server HttpOnly cookie orqali sessiyani tekshiradi
+// Option 2: Cookie-based auth (more secure, recommended for production)
+// Server verifies session via HttpOnly cookie
 // const eventSource = new EventSource('/api/v1/notifications/stream');
 
 eventSource.onmessage = (event) => {
     const notification = JSON.parse(event.data);
     showToast(notification.title, notification.body);
-    updateBalance(); // balansni yangilash
+    updateBalance(); // refresh balance
 };
 
-// SSE uzilganda qayta ulanish (reconnection)
+// Reconnection when SSE disconnects
 eventSource.onerror = () => {
-    // EventSource avtomatik qayta ulanadi (default: 3s)
-    // Agar manual boshqarish kerak bo'lsa:
+    // EventSource automatically reconnects (default: 3s)
+    // If manual control is needed:
     console.warn('SSE connection lost, reconnecting...');
 };
 ```
@@ -129,7 +129,7 @@ setInterval(async () => {
         method: 'POST',
         body: JSON.stringify({ refresh_token })
     });
-    // Yangi tokenlarni saqlash
+    // Save new tokens
 }, 14 * 60 * 1000); // 14 min
 ```
 
@@ -143,6 +143,6 @@ class XBankAPI {
     async issueCard(accountId, cardType)
     async getStatement(accountId, from, to)
     async getNotifications()
-    // ... barcha endpointlar
+    // ... all endpoints
 }
 ```

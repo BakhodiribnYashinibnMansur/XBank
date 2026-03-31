@@ -7,10 +7,10 @@
 - **DB level**: pgcrypto extension
 
 ## Hashing (one-way)
-- **Parollar**: bcrypt, cost=12
-- **CVV/PIN**: bcrypt (hech qachon plain)
+- **Passwords**: bcrypt, cost=12
+- **CVV/PIN**: bcrypt (never plain)
 - **Refresh token**: SHA-256
-- **Sensitive fields**: logda maskalangan (`****1234`)
+- **Sensitive fields**: masked in logs (`****1234`)
 
 ## Rate Limiting (Sliding Window, Redis)
 ```
@@ -21,8 +21,8 @@ Per-IP:         100 req/min
 /auth/2fa:      3 req/min
 ```
 
-## OWASP Top 10 Himoya
-| Threat | Himoya |
+## OWASP Top 10 Protection
+| Threat | Protection |
 |---|---|
 | SQL Injection | Parameterized queries ($1) |
 | XSS | JSON only + CSP headers |
@@ -34,14 +34,14 @@ Per-IP:         100 req/min
 
 ## Sensitive Data Protection
 ```
-Hech qachon loglanmaydi:
+Never logged:
   password, card_number, cvv, pin, totp_secret, refresh_token
-Logda faqat masked: ****1234, ***@***.com
-Response'da card_number hech qachon to'liq qaytarilmaydi
+Only masked in logs: ****1234, ***@***.com
+card_number is never returned in full in responses
 ```
 
 ## IP Whitelisting
-Admin panel faqat belgilangan IP'lardan: `ADMIN_WHITELIST_IPS=192.168.1.0/24`
+Admin panel is only accessible from designated IPs: `ADMIN_WHITELIST_IPS=192.168.1.0/24`
 
 ## Circuit Breaker
-Tashqi servislar uchun: 5 failures → 30s open → half-open → test → close/open
+For external services: 5 failures → 30s open → half-open → test → close/open

@@ -2,7 +2,7 @@
 
 ## Event Sourced Account
 
-Account holati eventlar yig'indisi. Hech qachon UPDATE/DELETE — faqat APPEND.
+Account state is the sum of events. Never UPDATE/DELETE — only APPEND.
 
 ### Account Aggregate
 ```go
@@ -12,9 +12,9 @@ type Account struct {
     Number           AccountNumber
     Currency         Currency
     Status           AccountStatus      // ACTIVE, FROZEN, CLOSED
-    Balance          Money              // Umumiy balans
-    AvailableBalance Money              // Foydalanish mumkin (balance - holds)
-    HoldAmount       Money              // Bloklangan summa
+    Balance          Money              // Total balance
+    AvailableBalance Money              // Available to use (balance - holds)
+    HoldAmount       Money              // Blocked amount
     DailyDebitLimit  Money
     MonthlyDebitLimit Money
 }
@@ -22,7 +22,7 @@ type Account struct {
 
 **Invariant:** `Balance = AvailableBalance + HoldAmount`
 
-### Operatsiyalar
+### Operations
 ```go
 func (a *Account) Open(userID, currency)           // → AccountOpenedEvent
 func (a *Account) Credit(amount, ref)               // → AccountCreditedEvent
@@ -31,28 +31,28 @@ func (a *Account) PlaceHold(amount, ref)            // → HoldPlacedEvent
 func (a *Account) CaptureHold(ref, captureAmount)   // → HoldCapturedEvent (partial capture)
 func (a *Account) ReleaseHold(ref)                  // → HoldReleasedEvent
 func (a *Account) Freeze()                          // → AccountFrozenEvent
-    // Frozen account da: yangi debit/credit BLOCK, mavjud hold lar expire bo'lguncha saqlanadi
-    // Admin yoki reconciliation tizimi muzlatadi
+    // On a frozen account: new debit/credit BLOCKED, existing holds are kept until they expire
+    // Frozen by admin or reconciliation system
 func (a *Account) Unfreeze()                        // → AccountUnfrozenEvent
 func (a *Account) Close()                           // → AccountClosedEvent
-    // Close qoidalari:
-    //   1. balance = 0 bo'lishi SHART
-    //   2. hold_amount = 0 bo'lishi SHART (mavjud hold lar bo'lsa close mumkin emas)
-    //   3. Pending transfer lar bo'lmasligi kerak
+    // Close rules:
+    //   1. balance MUST be 0
+    //   2. hold_amount MUST be 0 (cannot close if there are existing holds)
+    //   3. There must be no pending transfers
 ```
 
-## Hold Mexanizmi
+## Hold Mechanism
 
 ```
-Hold qo'yish (karta authorization):
+Placing a hold (card authorization):
   available_balance -= amount
   hold_amount += amount
 
-Hold capture (to'lov tasdiqlash):
-  balance -= amount (yoki partial amount)
+Hold capture (payment confirmation):
+  balance -= amount (or partial amount)
   hold_amount -= amount
 
-Hold release (bekor qilish):
+Hold release (cancellation):
   available_balance += amount
   hold_amount -= amount
 ```
@@ -60,31 +60,31 @@ Hold release (bekor qilish):
 ## Daily/Monthly Limits
 
 ```sql
--- Account darajasida:
+-- Account level:
 daily_debit_limit   BIGINT DEFAULT 1000000000   -- $10K
 monthly_debit_limit BIGINT DEFAULT 10000000000  -- $100K
 
--- User darajasida:
+-- User level:
 daily_transfer_limit  BIGINT DEFAULT 500000000   -- $5K
 monthly_transfer_limit BIGINT DEFAULT 5000000000  -- $50K
 ```
 
-Transfer oldidan tekshirish:
+Check before transfer:
 1. `SUM(debits today) + amount <= daily_debit_limit`
 2. `SUM(all account debits today) + amount <= daily_transfer_limit`
-3. Monthly ham xuddi shunday
+3. Monthly works the same way
 
 ## Specifications
 - `SufficientBalanceSpec` — available_balance >= amount
-- `DailyLimitSpec` — kunlik limit ichida
-- `MonthlyLimitSpec` — oylik limit ichida
+- `DailyLimitSpec` — within daily limit
+- `MonthlyLimitSpec` — within monthly limit
 - `AccountActiveSpec` — status == ACTIVE
 
 ## Event Store + Snapshots
 
-Har 100 eventdan keyin snapshot saqlash:
+Save snapshot after every 100 events:
 ```go
-// Yuklash: snapshot + undan keyingi eventlar
+// Loading: snapshot + events after it
 snapshot := loadLatestSnapshot(id)     // version=100
 events := loadEventsAfter(id, 100)    // 101, 102, ...
 account := rebuildFromSnapshot(snapshot)
@@ -94,7 +94,7 @@ account.Replay(events)
 ## CQRS Read Models
 - `AccountSummaryView` — balance, last tx, account info
 - `TransactionHistoryView` — paginated, filtered
-- `DashboardView` — barcha accountlar + umumiy balance
+- `DashboardView` — all accounts + total balance
 
 ## API Endpoints
 

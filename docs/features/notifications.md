@@ -1,14 +1,14 @@
 # Notifications & Audit Trail
 
 ## Real-Time Notifications (SSE)
-Server-Sent Events orqali jonli bildirishnomalar:
+Real-time notifications via Server-Sent Events:
 
 ### Event Types
-- `transfer.completed` → "Sizga $250 o'tkazildi"
-- `transfer.received` → "Hisobingizga $250 tushdi"
-- `card.blocked` → "Kartangiz bloklandi"
-- `aml.flagged` → "Tranzaksiyangiz tekshirilmoqda"
-- `session.new_login` → "Yangi qurilmadan kirish aniqlandi"
+- `transfer.completed` → "You have sent $250"
+- `transfer.received` → "Your account received $250"
+- `card.blocked` → "Your card has been blocked"
+- `aml.flagged` → "Your transaction is being reviewed"
+- `session.new_login` → "Login from a new device detected"
 
 ### Flow
 ```
@@ -29,10 +29,10 @@ CREATE TABLE notifications (
 ```
 
 ## Audit Trail (Immutable)
-- `audit_log` jadvaliga faqat INSERT — UPDATE/DELETE yo'q
-- Kim, qachon, nima qildi, qanday natija
+- `audit_log` table only supports INSERT — no UPDATE/DELETE
+- Who, when, what action, what result
 - IP address + User-Agent + Device ID + Correlation-ID
-- Retention: 7 yil (regulyator talabi)
+- Retention: 7 years (regulatory requirement)
 - Partitioned by month
 
 ### Audit Log Schema
@@ -57,35 +57,35 @@ CREATE TABLE audit_log (
 
 ## SSE Reconnection
 
-<!-- EventSource avtomatik qayta ulanadi, lekin ba'zi holatlarda
-     qo'shimcha boshqarish kerak -->
+<!-- EventSource reconnects automatically, but in some cases
+     additional handling is needed -->
 ```
-Server tomonda:
-  - retry: 3000 (3 sekund) field SSE event da yuboriladi
-  - Last-Event-ID header orqali oxirgi event ID ni olish
-  - O'tkazib yuborilgan eventlarni qayta yuborish
+Server side:
+  - retry: 3000 (3 seconds) field is sent in the SSE event
+  - Retrieve the last event ID via Last-Event-ID header
+  - Resend missed events
 
-Client tomonda:
-  - EventSource.onerror → avtomatik reconnect
-  - Agar 3 marta ketma-ket fail → manual reconnect (30 sekund kutish)
+Client side:
+  - EventSource.onerror → automatic reconnect
+  - If 3 consecutive failures → manual reconnect (wait 30 seconds)
 ```
 
-## Notification Retention (Saqlash muddati)
+## Notification Retention
 
-<!-- Bildirishnomalar abadiy saqlanmaydi -->
+<!-- Notifications are not stored forever -->
 ```
-Qoidalar:
-  - Notification jadvalida: 90 kun saqlash
-  - 90 kundan eski notification lar → arxivga o'tkazish (cold storage)
-  - Audit log: 7 yil saqlash (regulyator talabi, alohida jadval)
-  - pg_cron: har hafta eski notification larni tozalash
+Rules:
+  - Notification table: 90 days retention
+  - Notifications older than 90 days → moved to archive (cold storage)
+  - Audit log: 7 years retention (regulatory requirement, separate table)
+  - pg_cron: clean up old notifications weekly
 ```
 
 ## API Endpoints
 
-| Method | Endpoint | Middleware | Tavsif |
+| Method | Endpoint | Middleware | Description |
 |---|---|---|---|
-| GET | `/api/v1/notifications/stream` | Session (SSE) | Real-time bildirishnomalar stream |
-| GET | `/api/v1/notifications` | Session | Bildirishnomalar ro'yxati (paginated) |
-| PATCH | `/api/v1/notifications/{id}/read` | Session | Bildirishnomani o'qilgan deb belgilash |
-| PATCH | `/api/v1/notifications/read-all` | Session | Barcha bildirishnomalarni o'qilgan deb belgilash |
+| GET | `/api/v1/notifications/stream` | Session (SSE) | Real-time notifications stream |
+| GET | `/api/v1/notifications` | Session | Notifications list (paginated) |
+| PATCH | `/api/v1/notifications/{id}/read` | Session | Mark notification as read |
+| PATCH | `/api/v1/notifications/read-all` | Session | Mark all notifications as read |
