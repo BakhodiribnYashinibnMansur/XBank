@@ -5,6 +5,7 @@
 - [Event Sourcing](architecture/event-sourcing.md) — Account event sourcing, snapshots, CQRS
 - [Saga Pattern](architecture/saga-pattern.md) — Transfer saga, compensations
 - [Message Queue](architecture/message-queue.md) — Apache Kafka, Protobuf, DLQ, async processing
+- [Error Handling](architecture/error-handling.md) — Structured errors, error codes, per-layer errors
 
 ## Workflow Flows
 - [System flow overview](architecture/system-flow.md) — Register, Login, Transfer full diagram
