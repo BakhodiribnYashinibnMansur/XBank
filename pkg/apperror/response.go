@@ -10,7 +10,7 @@ import (
 
 // ErrorBody is the structured error returned in JSON responses.
 type ErrorBody struct {
-	Code    string `json:"code"`
+	Code    int    `json:"code"`
 	Message string `json:"message"`
 }
 
@@ -29,9 +29,8 @@ type Meta struct {
 }
 
 // ErrorHandler is a Fiber error handler that converts AppError to structured JSON.
-// Set as app.Config.ErrorHandler.
 func ErrorHandler(c *fiber.Ctx, err error) error {
-	requestID, _ := c.Locals("requestID").(string)
+	requestID, _ := c.Locals("request_id").(string)
 	correlationID := c.Get("X-Correlation-ID")
 
 	meta := Meta{
@@ -44,11 +43,8 @@ func ErrorHandler(c *fiber.Ctx, err error) error {
 	if errors.As(err, &appErr) {
 		return c.Status(appErr.HTTPStatus).JSON(ErrorResponse{
 			Status: "error",
-			Error: ErrorBody{
-				Code:    appErr.Code,
-				Message: appErr.Message,
-			},
-			Meta: meta,
+			Error:  ErrorBody{Code: appErr.Code, Message: appErr.Message},
+			Meta:   meta,
 		})
 	}
 
@@ -57,21 +53,15 @@ func ErrorHandler(c *fiber.Ctx, err error) error {
 	if errors.As(err, &fiberErr) {
 		return c.Status(fiberErr.Code).JSON(ErrorResponse{
 			Status: "error",
-			Error: ErrorBody{
-				Code:    http.StatusText(fiberErr.Code),
-				Message: fiberErr.Message,
-			},
-			Meta: meta,
+			Error:  ErrorBody{Code: fiberErr.Code, Message: fiberErr.Message},
+			Meta:   meta,
 		})
 	}
 
-	// Unknown error — always 500 with generic message
+	// Unknown error
 	return c.Status(http.StatusInternalServerError).JSON(ErrorResponse{
 		Status: "error",
-		Error: ErrorBody{
-			Code:    ErrInternal.Code,
-			Message: ErrInternal.Message,
-		},
-		Meta: meta,
+		Error:  ErrorBody{Code: ErrInternal.Code, Message: ErrInternal.Message},
+		Meta:   meta,
 	})
 }

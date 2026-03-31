@@ -27,6 +27,21 @@ docker-up:
 docker-down:
 	docker-compose down
 
+# ── Swagger ─────────────────────────────────────
+
+# Generate swagger docs from annotations
+swagger:
+	swag init -g cmd/api/main.go -o docs/swagger
+
+# ── JWT Keys ──────────────────────────────────────
+
+# ECDSA P-256 key pair yaratish (ES256 uchun)
+jwt-keys:
+	@mkdir -p keys
+	openssl ecparam -genkey -name prime256v1 -noout -out keys/private.pem
+	openssl ec -in keys/private.pem -pubout -out keys/public.pem
+	@echo "JWT keys yaratildi: keys/private.pem, keys/public.pem"
+
 # ── Goose Migrations ──────────────────────────────
 
 # Barcha migratsiyalarni qo'llash

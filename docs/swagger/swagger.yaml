@@ -1,0 +1,850 @@
+basePath: /api/v1
+definitions:
+  apperror.ErrorBody:
+    properties:
+      code:
+        type: integer
+      message:
+        type: string
+    type: object
+  apperror.ErrorResponse:
+    properties:
+      error:
+        $ref: '#/definitions/apperror.ErrorBody'
+      meta:
+        $ref: '#/definitions/apperror.Meta'
+      status:
+        type: string
+    type: object
+  apperror.Meta:
+    properties:
+      correlation_id:
+        type: string
+      request_id:
+        type: string
+      timestamp:
+        type: string
+    type: object
+  dto.AccountResponse:
+    properties:
+      account_number:
+        type: string
+      balance:
+        type: integer
+      created_at:
+        type: string
+      currency:
+        type: string
+      id:
+        type: string
+      status:
+        type: string
+    type: object
+  dto.ActivateCardRequest:
+    properties:
+      card_id:
+        type: string
+      pin:
+        description: 4 digits
+        type: string
+    type: object
+  dto.AuthResponse:
+    properties:
+      access_token:
+        type: string
+      refresh_token:
+        type: string
+      user:
+        $ref: '#/definitions/dto.UserResponse'
+    type: object
+  dto.CardActionRequest:
+    properties:
+      card_id:
+        type: string
+    type: object
+  dto.CardResponse:
+    properties:
+      account_id:
+        type: string
+      card_type:
+        type: string
+      created_at:
+        type: string
+      expiry_month:
+        type: integer
+      expiry_year:
+        type: integer
+      id:
+        type: string
+      masked_pan:
+        description: PAN never returned in full!
+        type: string
+      status:
+        type: string
+    type: object
+  dto.ChangePINRequest:
+    properties:
+      card_id:
+        type: string
+      new_pin:
+        type: string
+      old_pin:
+        type: string
+    type: object
+  dto.CloseAccountRequest:
+    properties:
+      account_id:
+        type: string
+    type: object
+  dto.CreateAccountRequest:
+    properties:
+      currency:
+        type: string
+    type: object
+  dto.DepositRequest:
+    properties:
+      account_id:
+        type: string
+      amount:
+        type: integer
+    type: object
+  dto.IssueCardRequest:
+    properties:
+      account_id:
+        type: string
+      card_type:
+        description: DEBIT, VIRTUAL
+        type: string
+    type: object
+  dto.LoginRequest:
+    properties:
+      email:
+        type: string
+      password:
+        type: string
+    type: object
+  dto.LogoutRequest:
+    properties:
+      refresh_token:
+        type: string
+    type: object
+  dto.PaginatedResponse:
+    properties:
+      data: {}
+      pagination:
+        $ref: '#/definitions/dto.PaginationResponse'
+    type: object
+  dto.PaginationResponse:
+    properties:
+      limit:
+        type: integer
+      page:
+        type: integer
+      total:
+        type: integer
+    type: object
+  dto.RefreshRequest:
+    properties:
+      refresh_token:
+        type: string
+    type: object
+  dto.RegisterRequest:
+    properties:
+      email:
+        type: string
+      first_name:
+        type: string
+      last_name:
+        type: string
+      password:
+        type: string
+    type: object
+  dto.SendTransferRequest:
+    properties:
+      amount:
+        type: integer
+      currency:
+        type: string
+      description:
+        type: string
+      from_account_id:
+        type: string
+      to_account_id:
+        type: string
+    type: object
+  dto.TransferResponse:
+    properties:
+      amount:
+        type: integer
+      created_at:
+        type: string
+      currency:
+        type: string
+      description:
+        type: string
+      failure_reason:
+        type: string
+      from_account_id:
+        type: string
+      id:
+        type: string
+      status:
+        type: string
+      to_account_id:
+        type: string
+    type: object
+  dto.UserResponse:
+    properties:
+      created_at:
+        type: string
+      email:
+        type: string
+      first_name:
+        type: string
+      id:
+        type: string
+      last_name:
+        type: string
+    type: object
+  dto.VerifyPINRequest:
+    properties:
+      card_id:
+        type: string
+      pin:
+        type: string
+    type: object
+  dto.WithdrawRequest:
+    properties:
+      account_id:
+        type: string
+      amount:
+        type: integer
+    type: object
+host: localhost:3000
+info:
+  contact: {}
+  description: XBank Banking API - DDD architecture with Go and Fiber
+  title: XBank API
+  version: "1.0"
+paths:
+  /accounts/close:
+    post:
+      consumes:
+      - application/json
+      parameters:
+      - description: Account ID
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/dto.CloseAccountRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/apperror.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Close an account (balance must be 0)
+      tags:
+      - Accounts
+  /accounts/create:
+    post:
+      consumes:
+      - application/json
+      parameters:
+      - description: Currency (UZS, USD, EUR)
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/dto.CreateAccountRequest'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            $ref: '#/definitions/dto.AccountResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/apperror.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Create a new bank account
+      tags:
+      - Accounts
+  /accounts/deposit:
+    post:
+      consumes:
+      - application/json
+      parameters:
+      - description: Account ID and amount (in minor units)
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/dto.DepositRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/dto.AccountResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/apperror.ErrorResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/apperror.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Deposit funds
+      tags:
+      - Accounts
+  /accounts/get:
+    get:
+      parameters:
+      - description: Account ID
+        in: query
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/dto.AccountResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/apperror.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Get account by ID
+      tags:
+      - Accounts
+  /accounts/list:
+    get:
+      parameters:
+      - default: 1
+        description: Page number
+        in: query
+        name: page
+        type: integer
+      - default: 20
+        description: Items per page
+        in: query
+        name: limit
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/dto.PaginatedResponse'
+      security:
+      - BearerAuth: []
+      summary: List user accounts (paginated)
+      tags:
+      - Accounts
+  /accounts/withdraw:
+    post:
+      consumes:
+      - application/json
+      parameters:
+      - description: Account ID and amount (in minor units)
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/dto.WithdrawRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/dto.AccountResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/apperror.ErrorResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/apperror.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Withdraw funds
+      tags:
+      - Accounts
+  /auth/login:
+    post:
+      consumes:
+      - application/json
+      parameters:
+      - description: Login credentials
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/dto.LoginRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/dto.AuthResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/apperror.ErrorResponse'
+      summary: User login
+      tags:
+      - Auth
+  /auth/logout:
+    post:
+      consumes:
+      - application/json
+      parameters:
+      - description: Refresh token
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/dto.LogoutRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      summary: Logout (end session)
+      tags:
+      - Auth
+  /auth/logout-all:
+    post:
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Logout from all sessions
+      tags:
+      - Auth
+  /auth/refresh:
+    post:
+      consumes:
+      - application/json
+      parameters:
+      - description: Refresh token
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/dto.RefreshRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/dto.AuthResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/apperror.ErrorResponse'
+      summary: Refresh access token
+      tags:
+      - Auth
+  /auth/register:
+    post:
+      consumes:
+      - application/json
+      parameters:
+      - description: Registration data
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/dto.RegisterRequest'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            $ref: '#/definitions/dto.UserResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/apperror.ErrorResponse'
+        "409":
+          description: Conflict
+          schema:
+            $ref: '#/definitions/apperror.ErrorResponse'
+      summary: Register a new user
+      tags:
+      - Auth
+  /cards/activate:
+    post:
+      consumes:
+      - application/json
+      parameters:
+      - description: Card ID and 4-digit PIN
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/dto.ActivateCardRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/dto.CardResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/apperror.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Activate a card by setting PIN
+      tags:
+      - Cards
+  /cards/block:
+    post:
+      consumes:
+      - application/json
+      parameters:
+      - description: Card ID
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/dto.CardActionRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Block a card
+      tags:
+      - Cards
+  /cards/change-pin:
+    post:
+      consumes:
+      - application/json
+      parameters:
+      - description: Card ID, old PIN, new PIN
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/dto.ChangePINRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/apperror.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Change card PIN
+      tags:
+      - Cards
+  /cards/get:
+    get:
+      parameters:
+      - description: Card ID
+        in: query
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/dto.CardResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/apperror.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Get card by ID
+      tags:
+      - Cards
+  /cards/issue:
+    post:
+      consumes:
+      - application/json
+      parameters:
+      - description: Account ID and card type
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/dto.IssueCardRequest'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            $ref: '#/definitions/dto.CardResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/apperror.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Issue a new card
+      tags:
+      - Cards
+  /cards/list:
+    get:
+      parameters:
+      - description: Account ID
+        in: query
+        name: account_id
+        required: true
+        type: string
+      - default: 1
+        description: Page number
+        in: query
+        name: page
+        type: integer
+      - default: 20
+        description: Items per page
+        in: query
+        name: limit
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/dto.PaginatedResponse'
+      security:
+      - BearerAuth: []
+      summary: List cards for an account (paginated)
+      tags:
+      - Cards
+  /cards/unblock:
+    post:
+      consumes:
+      - application/json
+      parameters:
+      - description: Card ID
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/dto.CardActionRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Unblock a card
+      tags:
+      - Cards
+  /cards/verify-pin:
+    post:
+      consumes:
+      - application/json
+      parameters:
+      - description: Card ID and PIN
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/dto.VerifyPINRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/apperror.ErrorResponse'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/apperror.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Verify card PIN
+      tags:
+      - Cards
+  /transfers/get:
+    get:
+      parameters:
+      - description: Transfer ID
+        in: query
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/dto.TransferResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/apperror.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Get transfer by ID
+      tags:
+      - Transfers
+  /transfers/list:
+    get:
+      parameters:
+      - description: Account ID
+        in: query
+        name: account_id
+        required: true
+        type: string
+      - default: 1
+        description: Page number
+        in: query
+        name: page
+        type: integer
+      - default: 20
+        description: Items per page
+        in: query
+        name: limit
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/dto.PaginatedResponse'
+      security:
+      - BearerAuth: []
+      summary: List transfers for an account (paginated)
+      tags:
+      - Transfers
+  /transfers/send:
+    post:
+      consumes:
+      - application/json
+      parameters:
+      - description: Transfer details
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/dto.SendTransferRequest'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            $ref: '#/definitions/dto.TransferResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/apperror.ErrorResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/apperror.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Transfer funds between accounts
+      tags:
+      - Transfers
+  /users/get:
+    get:
+      parameters:
+      - description: User ID
+        in: query
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/dto.UserResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/apperror.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Get user by ID
+      tags:
+      - Users
+securityDefinitions:
+  BearerAuth:
+    description: Enter "Bearer {token}" to authorize
+    in: header
+    name: Authorization
+    type: apiKey
+swagger: "2.0"

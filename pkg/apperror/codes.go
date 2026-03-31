@@ -1,141 +1,94 @@
 package apperror
 
-import "net/http"
-
 // ============================================================
-// COMMON — shared across all layers
-// ============================================================
-
-var (
-	ErrInternal       = Internal("INTERNAL_ERROR", "Internal server error")
-	ErrBadRequest     = BadRequest("BAD_REQUEST", "Invalid request")
-	ErrValidation     = BadRequest("VALIDATION_ERROR", "Validation failed")
-	ErrNotFound       = NotFound("NOT_FOUND", "Resource not found")
-	ErrForbidden      = Forbidden("FORBIDDEN", "Access denied")
-	ErrTooManyRequest = TooManyRequests("RATE_LIMITED", "Too many requests, try again later")
-)
-
-// ============================================================
-// DOMAIN — business rule violations
+// Error code ranges:
+//   1xxx — Common
+//   2xxx — User
+//   3xxx — Session / Auth
+//   4xxx — Account
+//   5xxx — Transfer
+//   6xxx — Card
+//   7xxx — KYC / AML / Fraud
+//   8xxx — Beneficiary
+//   9xxx — Infrastructure
 // ============================================================
 
-// --- User ---
+// --- Common (1xxx) ---
 var (
-	ErrInvalidEmail    = BadRequest("USER_INVALID_EMAIL", "Invalid email format")
-	ErrInvalidPassword = BadRequest("USER_INVALID_PASSWORD", "Password must be at least 8 characters")
-	ErrInvalidName     = BadRequest("USER_INVALID_NAME", "Name cannot be empty")
-	ErrUserNotFound    = NotFound("USER_NOT_FOUND", "User not found")
-	ErrEmailExists     = Conflict("USER_EMAIL_EXISTS", "This email is already registered")
+	ErrInternal       = Internal(1000, "Internal server error")
+	ErrBadRequest     = BadRequest(1001, "Invalid request")
+	ErrValidation     = BadRequest(1002, "Validation failed")
+	ErrNotFound       = NotFound(1003, "Resource not found")
+	ErrForbidden      = Forbidden(1004, "Access denied")
+	ErrTooManyRequest = TooManyRequests(1005, "Too many requests, try again later")
+	ErrInvalidJSON    = BadRequest(1006, "Invalid JSON format")
+	ErrMissingField   = BadRequest(1007, "Required field is missing")
+	ErrInvalidParam   = BadRequest(1008, "Invalid parameter")
 )
 
-// --- Session ---
+// --- User (2xxx) ---
 var (
-	ErrSessionNotFound = Unauthorized("SESSION_NOT_FOUND", "Session not found")
-	ErrSessionExpired  = Unauthorized("SESSION_EXPIRED", "Session has expired")
-	ErrInvalidToken    = Unauthorized("SESSION_INVALID_TOKEN", "Invalid token")
+	ErrInvalidEmail    = BadRequest(2001, "Invalid email format")
+	ErrInvalidPassword = BadRequest(2002, "Password must be at least 8 characters")
+	ErrInvalidName     = BadRequest(2003, "Name cannot be empty")
+	ErrUserNotFound    = NotFound(2004, "User not found")
+	ErrEmailExists     = Conflict(2005, "This email is already registered")
 )
 
-// --- Auth ---
+// --- Session / Auth (3xxx) ---
 var (
-	ErrInvalidCredentials = Unauthorized("AUTH_INVALID_CREDENTIALS", "Invalid email or password")
-	ErrAccountLocked      = Forbidden("AUTH_ACCOUNT_LOCKED", "Account is locked due to multiple failed attempts")
-	ErrTwoFactorRequired  = New("AUTH_2FA_REQUIRED", http.StatusPreconditionRequired, "Two-factor authentication required")
-	ErrInvalidOTP         = BadRequest("AUTH_INVALID_OTP", "Invalid or expired OTP code")
+	ErrSessionNotFound    = Unauthorized(3001, "Session not found")
+	ErrSessionExpired     = Unauthorized(3002, "Session has expired")
+	ErrInvalidToken       = Unauthorized(3003, "Invalid token")
+	ErrInvalidCredentials = Unauthorized(3004, "Invalid email or password")
+	ErrUnauthorized       = Unauthorized(3005, "Authentication required")
+	ErrTokenExpired       = Unauthorized(3006, "Access token has expired")
+	ErrTokenInvalid       = Unauthorized(3007, "Invalid access token")
 )
 
-// --- Account ---
+// --- Account (4xxx) ---
 var (
-	ErrAccountNotFound      = NotFound("ACCOUNT_NOT_FOUND", "Account not found")
-	ErrAccountFrozen        = Forbidden("ACCOUNT_FROZEN", "Account is frozen")
-	ErrInsufficientFunds    = BadRequest("ACCOUNT_INSUFFICIENT_FUNDS", "Insufficient balance")
-	ErrDailyLimitExceeded   = BadRequest("ACCOUNT_DAILY_LIMIT", "Daily transaction limit exceeded")
-	ErrMonthlyLimitExceeded = BadRequest("ACCOUNT_MONTHLY_LIMIT", "Monthly transaction limit exceeded")
+	ErrAccountNotFound   = NotFound(4001, "Account not found")
+	ErrAccountFrozen     = Forbidden(4002, "Account is frozen")
+	ErrAccountClosed     = Forbidden(4003, "Account is closed")
+	ErrBalanceNotZero    = BadRequest(4004, "Account balance must be 0 to close")
+	ErrInsufficientFunds = BadRequest(4005, "Insufficient balance")
 )
 
-// --- Transfer ---
+// --- Transfer (5xxx) ---
 var (
-	ErrTransferNotFound    = NotFound("TRANSFER_NOT_FOUND", "Transfer not found")
-	ErrTransferFailed      = Internal("TRANSFER_FAILED", "Transfer processing failed")
-	ErrSagaCompensation    = Internal("TRANSFER_SAGA_COMPENSATION", "Transfer failed, compensating")
-	ErrDuplicateTransfer   = Conflict("TRANSFER_DUPLICATE", "Duplicate transfer (idempotency key exists)")
-	ErrSameAccount         = BadRequest("TRANSFER_SAME_ACCOUNT", "Cannot transfer to the same account")
-	ErrInvalidAmount       = BadRequest("TRANSFER_INVALID_AMOUNT", "Transfer amount must be greater than zero")
-	ErrTransferTimeout     = New("TRANSFER_TIMEOUT", http.StatusGatewayTimeout, "Transfer processing timed out")
+	ErrTransferNotFound = NotFound(5001, "Transfer not found")
+	ErrTransferFailed   = Internal(5002, "Transfer processing failed")
+	ErrSameAccount      = BadRequest(5003, "Cannot transfer to the same account")
+	ErrInvalidAmount    = BadRequest(5004, "Amount must be greater than zero")
+	ErrCurrencyMismatch = BadRequest(5005, "Currencies do not match")
 )
 
-// --- Card ---
+// --- Card (6xxx) ---
 var (
-	ErrCardNotFound       = NotFound("CARD_NOT_FOUND", "Card not found")
-	ErrCardBlocked        = Forbidden("CARD_BLOCKED", "Card is blocked")
-	ErrCardExpired        = BadRequest("CARD_EXPIRED", "Card has expired")
-	ErrInvalidPAN         = BadRequest("CARD_INVALID_PAN", "Invalid card number (Luhn check failed)")
-	ErrInvalidPIN         = BadRequest("CARD_INVALID_PIN", "Invalid PIN")
-	ErrInvalidCVV         = BadRequest("CARD_INVALID_CVV", "Invalid CVV")
-	ErrPINAttemptsExceeded = Forbidden("CARD_PIN_LOCKED", "Card locked: too many wrong PIN attempts")
-	ErrCardLimitExceeded  = BadRequest("CARD_LIMIT_EXCEEDED", "Card transaction limit exceeded")
+	ErrCardNotFound        = NotFound(6001, "Card not found")
+	ErrCardBlocked         = Forbidden(6002, "Card is blocked")
+	ErrCardExpired         = BadRequest(6003, "Card has expired")
+	ErrInvalidPIN          = BadRequest(6004, "Invalid PIN")
+	ErrPINAttemptsExceeded = Forbidden(6005, "Card locked: too many wrong PIN attempts")
 )
 
-// --- KYC / AML ---
+// --- KYC / AML / Fraud (7xxx) ---
 var (
-	ErrKYCRequired      = Forbidden("KYC_REQUIRED", "KYC verification required")
-	ErrKYCPending       = Forbidden("KYC_PENDING", "KYC verification is pending")
-	ErrKYCRejected      = Forbidden("KYC_REJECTED", "KYC verification was rejected")
-	ErrAMLBlocked       = Forbidden("AML_BLOCKED", "Transaction blocked by AML screening")
-	ErrAMLFlagged       = New("AML_FLAGGED", http.StatusPreconditionRequired, "Transaction flagged for AML review")
+	ErrKYCRequired   = Forbidden(7001, "KYC verification required")
+	ErrKYCPending    = Forbidden(7002, "KYC verification is pending")
+	ErrAMLBlocked    = Forbidden(7003, "Transaction blocked by AML screening")
+	ErrFraudDetected = Forbidden(7004, "Suspicious activity detected")
 )
 
-// --- Fraud ---
+// --- Beneficiary (8xxx) ---
 var (
-	ErrFraudDetected    = Forbidden("FRAUD_DETECTED", "Suspicious activity detected")
-	ErrFraudHighRisk    = Forbidden("FRAUD_HIGH_RISK", "Transaction blocked: high risk score")
-	ErrDeviceNotTrusted = Forbidden("FRAUD_DEVICE_UNTRUSTED", "Unrecognized device, verification required")
+	ErrBeneficiaryNotFound = NotFound(8001, "Beneficiary not found")
+	ErrBeneficiaryExists   = Conflict(8002, "Beneficiary already exists")
 )
 
-// --- Beneficiary ---
+// --- Infrastructure (9xxx) ---
 var (
-	ErrBeneficiaryNotFound = NotFound("BENEFICIARY_NOT_FOUND", "Beneficiary not found")
-	ErrBeneficiaryExists   = Conflict("BENEFICIARY_EXISTS", "Beneficiary already exists")
-)
-
-// ============================================================
-// APPLICATION — use case / orchestration errors
-// ============================================================
-
-var (
-	ErrIdempotencyConflict = Conflict("APP_IDEMPOTENCY_CONFLICT", "Request already processed (idempotency)")
-	ErrConcurrencyConflict = Conflict("APP_CONCURRENCY_CONFLICT", "Resource was modified by another request")
-)
-
-// ============================================================
-// INFRASTRUCTURE — external system errors
-// ============================================================
-
-var (
-	ErrDatabase       = Internal("INFRA_DB_ERROR", "Database operation failed")
-	ErrDBTimeout      = ServiceUnavailable("INFRA_DB_TIMEOUT", "Database connection timed out")
-	ErrDBDeadlock     = Internal("INFRA_DB_DEADLOCK", "Database deadlock detected, please retry")
-	ErrRedis          = Internal("INFRA_REDIS_ERROR", "Redis operation failed")
-	ErrRedisTimeout   = ServiceUnavailable("INFRA_REDIS_TIMEOUT", "Redis connection timed out")
-	ErrKafka          = Internal("INFRA_KAFKA_ERROR", "Kafka operation failed")
-	ErrKafkaTimeout   = ServiceUnavailable("INFRA_KAFKA_TIMEOUT", "Kafka connection timed out")
-	ErrVault          = Internal("INFRA_VAULT_ERROR", "Vault operation failed")
-	ErrVaultTimeout   = ServiceUnavailable("INFRA_VAULT_TIMEOUT", "Vault connection timed out")
-	ErrEncryption     = Internal("INFRA_ENCRYPTION_ERROR", "Encryption/decryption failed")
-	ErrE2EEDecrypt    = BadRequest("INFRA_E2EE_DECRYPT_FAILED", "E2EE decryption failed (invalid key or corrupted data)")
-)
-
-// ============================================================
-// HTTP — request/response level errors
-// ============================================================
-
-var (
-	ErrInvalidJSON      = BadRequest("HTTP_INVALID_JSON", "Invalid JSON format")
-	ErrMissingField     = BadRequest("HTTP_MISSING_FIELD", "Required field is missing")
-	ErrInvalidParam     = BadRequest("HTTP_INVALID_PARAM", "Invalid URL parameter")
-	ErrUnauthorized     = Unauthorized("HTTP_UNAUTHORIZED", "Authentication required")
-	ErrTokenExpired     = Unauthorized("HTTP_TOKEN_EXPIRED", "Access token has expired")
-	ErrTokenInvalid     = Unauthorized("HTTP_TOKEN_INVALID", "Invalid access token")
-	ErrCSRFMismatch     = Forbidden("HTTP_CSRF_MISMATCH", "CSRF token mismatch")
-	ErrCORSNotAllowed   = Forbidden("HTTP_CORS_NOT_ALLOWED", "Origin not allowed")
-	ErrRequestTooLarge  = New("HTTP_REQUEST_TOO_LARGE", http.StatusRequestEntityTooLarge, "Request body too large")
+	ErrDatabase  = Internal(9001, "Database operation failed")
+	ErrDBTimeout = ServiceUnavailable(9002, "Database connection timed out")
 )
