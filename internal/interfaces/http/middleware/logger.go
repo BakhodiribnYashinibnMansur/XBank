@@ -19,6 +19,8 @@ func LoggerMiddleware() fiber.Handler {
 		err := c.Next()
 
 		requestID, _ := c.Locals("request_id").(string)
+		traceID, _ := c.Locals("trace_id").(string)
+		spanID, _ := c.Locals("span_id").(string)
 
 		logger.Log.Info("http.request",
 			zap.String("method", c.Method()),
@@ -27,6 +29,8 @@ func LoggerMiddleware() fiber.Handler {
 			zap.Duration("duration", time.Since(start)),
 			zap.String("ip", c.IP()),
 			zap.String("request_id", requestID),
+			zap.String("trace_id", traceID),
+			zap.String("span_id", spanID),
 		)
 
 		return err

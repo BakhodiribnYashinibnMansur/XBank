@@ -35,8 +35,14 @@ func AuthMiddleware(jwtService *infraAuth.JWTService) fiber.Handler {
 			return apperror.ErrTokenInvalid
 		}
 
+		// IP binding check - token faqat yaratilgan IP dan ishlaydi
+		if claims.IPAddress != "" && claims.IPAddress != c.IP() {
+			return apperror.ErrTokenInvalid.WithMessage("Token cannot be used from a different IP address")
+		}
+
 		c.Locals("user_id", claims.UserID)
 		c.Locals("email", claims.Email)
+		c.Locals("role", claims.Role)
 
 		return c.Next()
 	}

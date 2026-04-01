@@ -2,9 +2,11 @@ package postgres
 
 import (
 	"context"
+	"time"
 
 	"github.com/BakhodiribnYashinibnMansur/XBank/internal/domain/account"
 	"github.com/BakhodiribnYashinibnMansur/XBank/internal/domain/shared"
+	"github.com/BakhodiribnYashinibnMansur/XBank/internal/infrastructure/metrics"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
@@ -17,19 +19,23 @@ func NewAccountRepository(pool *pgxpool.Pool) *AccountRepository {
 }
 
 func (r *AccountRepository) Create(ctx context.Context, a *account.Account) error {
+	start := time.Now()
 	db := ExtractDBTX(ctx, r.pool)
 	query := `
 		INSERT INTO accounts (user_id, account_number, balance, currency, status, created_at, updated_at)
 		VALUES ($1, $2, $3, $4, $5, $6, $7)
 		RETURNING id`
 
-	return db.QueryRow(ctx, query,
+	err := db.QueryRow(ctx, query,
 		a.UserID, a.AccountNumber, a.Balance.Amount, a.Balance.Currency,
 		a.Status, a.CreatedAt, a.UpdatedAt,
 	).Scan(&a.ID)
+	metrics.ObserveQuery("AccountRepo.Create", start, err)
+	return err
 }
 
 func (r *AccountRepository) GetByID(ctx context.Context, id string) (*account.Account, error) {
+	start := time.Now()
 	db := ExtractDBTX(ctx, r.pool)
 	query := `
 		SELECT id, user_id, account_number, balance, currency, status, created_at, updated_at
@@ -42,6 +48,7 @@ func (r *AccountRepository) GetByID(ctx context.Context, id string) (*account.Ac
 		&a.Balance.Amount, &currency,
 		&a.Status, &a.CreatedAt, &a.UpdatedAt,
 	)
+	metrics.ObserveQuery("AccountRepo.GetByID", start, err)
 	if err != nil {
 		return nil, account.ErrAccountNotFound
 	}
@@ -50,6 +57,7 @@ func (r *AccountRepository) GetByID(ctx context.Context, id string) (*account.Ac
 }
 
 func (r *AccountRepository) GetByIDForUpdate(ctx context.Context, id string) (*account.Account, error) {
+	start := time.Now()
 	db := ExtractDBTX(ctx, r.pool)
 	query := `
 		SELECT id, user_id, account_number, balance, currency, status, created_at, updated_at
@@ -62,6 +70,7 @@ func (r *AccountRepository) GetByIDForUpdate(ctx context.Context, id string) (*a
 		&a.Balance.Amount, &currency,
 		&a.Status, &a.CreatedAt, &a.UpdatedAt,
 	)
+	metrics.ObserveQuery("AccountRepo.GetByIDForUpdate", start, err)
 	if err != nil {
 		return nil, account.ErrAccountNotFound
 	}
@@ -70,6 +79,7 @@ func (r *AccountRepository) GetByIDForUpdate(ctx context.Context, id string) (*a
 }
 
 func (r *AccountRepository) ListByUserID(ctx context.Context, userID string, limit, offset int) ([]*account.Account, error) {
+	start := time.Now()
 	db := ExtractDBTX(ctx, r.pool)
 	query := `
 		SELECT id, user_id, account_number, balance, currency, status, created_at, updated_at
@@ -78,6 +88,7 @@ func (r *AccountRepository) ListByUserID(ctx context.Context, userID string, lim
 
 	rows, err := db.Query(ctx, query, userID, limit, offset)
 	if err != nil {
+		metrics.ObserveQuery("AccountRepo.ListByUserID", start, err)
 		return nil, err
 	}
 	defer rows.Close()
@@ -96,22 +107,27 @@ func (r *AccountRepository) ListByUserID(ctx context.Context, userID string, lim
 		a.Balance.Currency = shared.Currency(currency)
 		accounts = append(accounts, a)
 	}
+	metrics.ObserveQuery("AccountRepo.ListByUserID", start, nil)
 	return accounts, nil
 }
 
 func (r *AccountRepository) CountByUserID(ctx context.Context, userID string) (int64, error) {
+	start := time.Now()
 	db := ExtractDBTX(ctx, r.pool)
 	var count int64
 	err := db.QueryRow(ctx, `SELECT COUNT(*) FROM accounts WHERE user_id = $1`, userID).Scan(&count)
+	metrics.ObserveQuery("AccountRepo.CountByUserID", start, err)
 	return count, err
 }
 
 func (r *AccountRepository) Update(ctx context.Context, a *account.Account) error {
+	start := time.Now()
 	db := ExtractDBTX(ctx, r.pool)
 	query := `
 		UPDATE accounts SET balance = $1, status = $2, updated_at = $3
 		WHERE id = $4`
 
 	_, err := db.Exec(ctx, query, a.Balance.Amount, a.Status, a.UpdatedAt, a.ID)
+	metrics.ObserveQuery("AccountRepo.Update", start, err)
 	return err
 }

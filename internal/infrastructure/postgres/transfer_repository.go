@@ -2,9 +2,11 @@ package postgres
 
 import (
 	"context"
+	"time"
 
 	"github.com/BakhodiribnYashinibnMansur/XBank/internal/domain/shared"
 	"github.com/BakhodiribnYashinibnMansur/XBank/internal/domain/transfer"
+	"github.com/BakhodiribnYashinibnMansur/XBank/internal/infrastructure/metrics"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
@@ -17,6 +19,7 @@ func NewTransferRepository(pool *pgxpool.Pool) *TransferRepository {
 }
 
 func (r *TransferRepository) Create(ctx context.Context, t *transfer.Transfer) error {
+	start := time.Now()
 	db := ExtractDBTX(ctx, r.pool)
 	query := `
 		INSERT INTO transfers (id, from_account_id, to_account_id, amount, currency, status, description, failure_reason, created_at)
@@ -26,10 +29,12 @@ func (r *TransferRepository) Create(ctx context.Context, t *transfer.Transfer) e
 		t.ID, t.FromAccountID, t.ToAccountID, t.Amount.Amount,
 		t.Amount.Currency, t.Status, t.Description, t.FailureReason, t.CreatedAt,
 	)
+	metrics.ObserveQuery("TransferRepo.Create", start, err)
 	return err
 }
 
 func (r *TransferRepository) GetByID(ctx context.Context, id string) (*transfer.Transfer, error) {
+	start := time.Now()
 	db := ExtractDBTX(ctx, r.pool)
 	query := `
 		SELECT id, from_account_id, to_account_id, amount, currency,
@@ -43,6 +48,7 @@ func (r *TransferRepository) GetByID(ctx context.Context, id string) (*transfer.
 		&t.Amount.Amount, &currency,
 		&t.Status, &t.Description, &t.FailureReason, &t.CreatedAt,
 	)
+	metrics.ObserveQuery("TransferRepo.GetByID", start, err)
 	if err != nil {
 		return nil, transfer.ErrTransferNotFound
 	}
@@ -51,6 +57,7 @@ func (r *TransferRepository) GetByID(ctx context.Context, id string) (*transfer.
 }
 
 func (r *TransferRepository) ListByAccountID(ctx context.Context, accountID string, limit, offset int) ([]*transfer.Transfer, error) {
+	start := time.Now()
 	db := ExtractDBTX(ctx, r.pool)
 	query := `
 		SELECT id, from_account_id, to_account_id, amount, currency,
@@ -62,6 +69,7 @@ func (r *TransferRepository) ListByAccountID(ctx context.Context, accountID stri
 
 	rows, err := db.Query(ctx, query, accountID, limit, offset)
 	if err != nil {
+		metrics.ObserveQuery("TransferRepo.ListByAccountID", start, err)
 		return nil, err
 	}
 	defer rows.Close()
@@ -80,24 +88,29 @@ func (r *TransferRepository) ListByAccountID(ctx context.Context, accountID stri
 		t.Amount.Currency = shared.Currency(currency)
 		transfers = append(transfers, t)
 	}
+	metrics.ObserveQuery("TransferRepo.ListByAccountID", start, nil)
 	return transfers, nil
 }
 
 func (r *TransferRepository) Update(ctx context.Context, t *transfer.Transfer) error {
+	start := time.Now()
 	db := ExtractDBTX(ctx, r.pool)
 	_, err := db.Exec(ctx,
 		`UPDATE transfers SET status = $1, failure_reason = $2 WHERE id = $3`,
 		t.Status, t.FailureReason, t.ID,
 	)
+	metrics.ObserveQuery("TransferRepo.Update", start, err)
 	return err
 }
 
 func (r *TransferRepository) CountByAccountID(ctx context.Context, accountID string) (int64, error) {
+	start := time.Now()
 	db := ExtractDBTX(ctx, r.pool)
 	var count int64
 	err := db.QueryRow(ctx,
 		`SELECT COUNT(*) FROM transfers WHERE from_account_id = $1 OR to_account_id = $1`,
 		accountID,
 	).Scan(&count)
+	metrics.ObserveQuery("TransferRepo.CountByAccountID", start, err)
 	return count, err
 }

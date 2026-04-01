@@ -52,7 +52,7 @@ func newTestJWTService(t *testing.T) *infraAuth.JWTService {
 func TestHealthEndpoint(t *testing.T) {
 	cfg := testConfig()
 	jwtService := newTestJWTService(t)
-	app := router.NewRouter(&handler.UserHandler{}, &handler.AuthHandler{}, &handler.AccountHandler{}, &handler.TransferHandler{}, &handler.CardHandler{}, jwtService, cfg)
+	app := router.NewRouter(&handler.UserHandler{}, &handler.AuthHandler{}, &handler.AccountHandler{}, &handler.TransferHandler{}, &handler.CardHandler{}, &handler.BeneficiaryHandler{}, &handler.ExchangeHandler{}, &handler.HealthHandler{}, jwtService, cfg)
 
 	req, _ := http.NewRequest(http.MethodGet, "/health", nil)
 	resp, err := app.Test(req)
@@ -76,7 +76,7 @@ func TestHealthEndpoint(t *testing.T) {
 func TestProtectedRouteWithoutToken(t *testing.T) {
 	cfg := testConfig()
 	jwtService := newTestJWTService(t)
-	app := router.NewRouter(&handler.UserHandler{}, &handler.AuthHandler{}, &handler.AccountHandler{}, &handler.TransferHandler{}, &handler.CardHandler{}, jwtService, cfg)
+	app := router.NewRouter(&handler.UserHandler{}, &handler.AuthHandler{}, &handler.AccountHandler{}, &handler.TransferHandler{}, &handler.CardHandler{}, &handler.BeneficiaryHandler{}, &handler.ExchangeHandler{}, &handler.HealthHandler{}, jwtService, cfg)
 
 	req, _ := http.NewRequest(http.MethodGet, "/api/v1/users/get?id=123", nil)
 	resp, err := app.Test(req)

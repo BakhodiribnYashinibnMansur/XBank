@@ -2,7 +2,9 @@ package kafka
 
 import (
 	"context"
+	"time"
 
+	"github.com/BakhodiribnYashinibnMansur/XBank/internal/infrastructure/metrics"
 	"github.com/segmentio/kafka-go"
 )
 
@@ -25,11 +27,21 @@ func NewProducer(brokers []string) *Producer {
 
 // Publish sends a message to the specified Kafka topic.
 func (p *Producer) Publish(ctx context.Context, topic string, key string, payload []byte) error {
-	return p.writer.WriteMessages(ctx, kafka.Message{
+	start := time.Now()
+	err := p.writer.WriteMessages(ctx, kafka.Message{
 		Topic: topic,
 		Key:   []byte(key),
 		Value: payload,
 	})
+
+	status := "ok"
+	if err != nil {
+		status = "error"
+	}
+	metrics.KafkaMessagesTotal.WithLabelValues(topic, status).Inc()
+	metrics.KafkaPublishDuration.WithLabelValues(topic).Observe(time.Since(start).Seconds())
+
+	return err
 }
 
 // Close gracefully shuts down the Kafka writer.

@@ -9,6 +9,8 @@ import (
 	"github.com/BakhodiribnYashinibnMansur/XBank/pkg/apperror"
 	"github.com/gofiber/fiber/v2"
 	"github.com/gofiber/swagger"
+	"github.com/prometheus/client_golang/prometheus/promhttp"
+	"github.com/valyala/fasthttp/fasthttpadaptor"
 )
 
 func NewRouter(
@@ -17,6 +19,9 @@ func NewRouter(
 	accountHandler *handler.AccountHandler,
 	transferHandler *handler.TransferHandler,
 	cardHandler *handler.CardHandler,
+	beneficiaryHandler *handler.BeneficiaryHandler,
+	exchangeHandler *handler.ExchangeHandler,
+	healthHandler *handler.HealthHandler,
 	jwtService *infraAuth.JWTService,
 	cfg *config.Config,
 ) *fiber.App {
@@ -28,13 +33,23 @@ func NewRouter(
 	// Middleware chain
 	app.Use(middleware.RecoveryMiddleware())
 	app.Use(middleware.RequestIDMiddleware())
+	app.Use(middleware.TracingMiddleware())
 	app.Use(middleware.CORSMiddleware(cfg.CORS.Origins()))
 	app.Use(middleware.RateLimitMiddleware(cfg.RateLimit.MaxRequests, cfg.RateLimit.Window()))
+	app.Use(middleware.MetricsMiddleware())
 	app.Use(middleware.LoggerMiddleware())
 
-	app.Get("/health", func(c *fiber.Ctx) error {
-		return c.JSON(fiber.Map{"status": "ok"})
+	// Prometheus metrics endpoint
+	prometheusHandler := fasthttpadaptor.NewFastHTTPHandler(promhttp.Handler())
+	app.Get("/metrics", func(c *fiber.Ctx) error {
+		prometheusHandler(c.Context())
+		return nil
 	})
+
+	// Health probes
+	app.Get("/health", healthHandler.Live)
+	app.Get("/health/live", healthHandler.Live)
+	app.Get("/health/ready", healthHandler.Ready)
 
 	// Swagger UI: http://localhost:3000/swagger/
 	app.Get("/swagger/*", swagger.HandlerDefault)
@@ -56,15 +71,18 @@ func NewRouter(
 	users := protected.Group("/users")
 	users.Get("/get", userHandler.GetByID)
 
-	// Accounts: static paths, ID comes from query/body
+	// Accounts
 	accounts := protected.Group("/accounts")
 	accounts.Post("/create", accountHandler.Create)
 	accounts.Get("/list", accountHandler.List)
-	accounts.Get("/get", accountHandler.GetByID)       // ?id=xxx
-	accounts.Post("/deposit", accountHandler.Deposit)   // body: {account_id, amount}
-	accounts.Post("/withdraw", accountHandler.Withdraw) // body: {account_id, amount}
-	accounts.Post("/close", accountHandler.Close)       // body: {account_id}
-	accounts.Get("/history", accountHandler.History)    // ?id=xxx
+	accounts.Get("/get", accountHandler.GetByID)
+	accounts.Post("/deposit", accountHandler.Deposit)
+	accounts.Post("/withdraw", accountHandler.Withdraw)
+	accounts.Get("/history", accountHandler.History)
+
+	// Account admin operations (ADMIN, TELLER only)
+	accountAdmin := accounts.Group("", middleware.RequireRole("ADMIN", "TELLER"))
+	accountAdmin.Post("/close", accountHandler.Close)
 
 	// Transfers
 	transfers := protected.Group("/transfers")
@@ -81,8 +99,23 @@ func NewRouter(
 	cards.Post("/:id/activate", cardHandler.Activate)
 	cards.Post("/:id/verify-pin", cardHandler.VerifyPIN)
 	cards.Put("/:id/pin", cardHandler.ChangePIN)
-	cards.Post("/:id/block", cardHandler.Block)
-	cards.Post("/:id/unblock", cardHandler.Unblock)
+	// Card admin operations (ADMIN only)
+	cardAdmin := cards.Group("", middleware.RequireRole("ADMIN"))
+	cardAdmin.Post("/:id/block", cardHandler.Block)
+	cardAdmin.Post("/:id/unblock", cardHandler.Unblock)
+
+	// Exchange rates (public: view, protected: convert, admin: set rates)
+	currencies := v1.Group("/currencies")
+	currencies.Get("/rate", exchangeHandler.GetRate)
+	currencies.Get("/rates", exchangeHandler.ListRates)
+	currencies.Post("/convert", middleware.AuthMiddleware(jwtService), exchangeHandler.Convert)
+	currencies.Post("/rate", middleware.AuthMiddleware(jwtService), middleware.RequireRole("ADMIN"), exchangeHandler.UpsertRate)
+
+	// Beneficiaries
+	bens := protected.Group("/beneficiaries")
+	bens.Post("/add", beneficiaryHandler.Add)
+	bens.Get("/list", beneficiaryHandler.List)
+	bens.Delete("/delete", beneficiaryHandler.Delete)
 
 	return app
 }

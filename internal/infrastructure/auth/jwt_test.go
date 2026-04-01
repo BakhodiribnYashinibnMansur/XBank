@@ -52,7 +52,7 @@ func newTestJWTService(t *testing.T) *JWTService {
 func TestGenerateAndValidateToken(t *testing.T) {
 	svc := newTestJWTService(t)
 
-	pair, err := svc.GenerateTokenPair("user-123", "test@example.com")
+	pair, err := svc.GenerateTokenPair("user-123", "test@example.com", "CUSTOMER", "0.0.0.0")
 	if err != nil {
 		t.Fatalf("Token yaratishda xatolik: %v", err)
 	}
@@ -85,7 +85,7 @@ func TestValidateExpiredToken(t *testing.T) {
 	privPath, pubPath := generateTestKeys(t)
 	svc, _ := NewJWTService(privPath, pubPath, "test", "test", 1*time.Nanosecond, 24*time.Hour)
 
-	pair, _ := svc.GenerateTokenPair("user-123", "test@example.com")
+	pair, _ := svc.GenerateTokenPair("user-123", "test@example.com", "CUSTOMER", "0.0.0.0")
 	time.Sleep(2 * time.Millisecond)
 
 	_, err := svc.ValidateAccessToken(pair.AccessToken)
@@ -108,7 +108,7 @@ func TestValidateTokenWithWrongKey(t *testing.T) {
 	svc1 := newTestJWTService(t)
 	svc2 := newTestJWTService(t) // boshqa key pair
 
-	pair, _ := svc1.GenerateTokenPair("user-123", "test@example.com")
+	pair, _ := svc1.GenerateTokenPair("user-123", "test@example.com", "CUSTOMER", "0.0.0.0")
 
 	_, err := svc2.ValidateAccessToken(pair.AccessToken)
 	if err != ErrInvalidToken {

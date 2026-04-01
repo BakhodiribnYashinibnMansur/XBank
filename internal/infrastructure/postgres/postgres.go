@@ -5,13 +5,23 @@ import (
 	"fmt"
 
 	"github.com/BakhodiribnYashinibnMansur/XBank/pkg/logger"
+	"github.com/exaring/otelpgx"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"go.uber.org/zap"
 )
 
-// NewPool - creates a PostgreSQL connection pool
+// NewPool - creates a PostgreSQL connection pool with OpenTelemetry tracing.
+// Every SQL query automatically gets a Jaeger span via otelpgx.
 func NewPool(ctx context.Context, databaseURL string) (*pgxpool.Pool, error) {
-	pool, err := pgxpool.New(ctx, databaseURL)
+	cfg, err := pgxpool.ParseConfig(databaseURL)
+	if err != nil {
+		return nil, fmt.Errorf("postgres config parse xatolik: %w", err)
+	}
+
+	// otelpgx — auto-instrument every query with OpenTelemetry spans
+	cfg.ConnConfig.Tracer = otelpgx.NewTracer()
+
+	pool, err := pgxpool.NewWithConfig(ctx, cfg)
 	if err != nil {
 		return nil, fmt.Errorf("postgres pool yaratishda xatolik: %w", err)
 	}

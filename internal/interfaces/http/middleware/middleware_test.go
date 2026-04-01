@@ -138,7 +138,7 @@ func TestAuthMiddleware_ValidToken(t *testing.T) {
 		return c.JSON(fiber.Map{"user_id": userID, "email": email})
 	})
 
-	pair, _ := jwtService.GenerateTokenPair("user-123", "ali@example.com")
+	pair, _ := jwtService.GenerateTokenPair("user-123", "ali@example.com", "CUSTOMER", "0.0.0.0")
 	req, _ := http.NewRequest(http.MethodGet, "/protected", nil)
 	req.Header.Set("Authorization", "Bearer "+pair.AccessToken)
 

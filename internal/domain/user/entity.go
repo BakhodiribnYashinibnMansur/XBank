@@ -16,6 +16,15 @@ var (
 	ErrEmailExists     = apperror.ErrEmailExists
 )
 
+// Role - user role for RBAC
+type Role string
+
+const (
+	RoleCustomer Role = "CUSTOMER"
+	RoleTeller   Role = "TELLER"
+	RoleAdmin    Role = "ADMIN"
+)
+
 // User - core entity (business object)
 type User struct {
 	ID        string
@@ -23,6 +32,7 @@ type User struct {
 	Password  string // hashed
 	FirstName string
 	LastName  string
+	Role      Role
 	CreatedAt time.Time
 	UpdatedAt time.Time
 }
@@ -46,6 +56,7 @@ func NewUser(email, hashedPassword, firstName, lastName string) (*User, error) {
 		Password:  hashedPassword,
 		FirstName: firstName,
 		LastName:  lastName,
+		Role:      RoleCustomer, // default role
 		CreatedAt: now,
 		UpdatedAt: now,
 	}, nil

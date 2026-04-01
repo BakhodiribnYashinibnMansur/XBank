@@ -7,6 +7,7 @@ import (
 	"github.com/BakhodiribnYashinibnMansur/XBank/internal/domain/session"
 	"github.com/BakhodiribnYashinibnMansur/XBank/internal/domain/user"
 	infraAuth "github.com/BakhodiribnYashinibnMansur/XBank/internal/infrastructure/auth"
+	"github.com/BakhodiribnYashinibnMansur/XBank/internal/infrastructure/metrics"
 	"github.com/BakhodiribnYashinibnMansur/XBank/pkg/apperror"
 	"golang.org/x/crypto/bcrypt"
 )
@@ -42,16 +43,18 @@ func (s *Service) Login(ctx context.Context, email, password, userAgent, ipAddre
 	// 1. Find the user
 	u, err := s.userRepo.GetByEmail(ctx, email)
 	if err != nil {
+		metrics.LoginsTotal.WithLabelValues("failed").Inc()
 		return nil, ErrInvalidCredentials // Security: don't reveal "user not found"
 	}
 
 	// 2. Verify the password
 	if err := bcrypt.CompareHashAndPassword([]byte(u.Password), []byte(password)); err != nil {
+		metrics.LoginsTotal.WithLabelValues("failed").Inc()
 		return nil, ErrInvalidCredentials // Security: don't reveal "wrong password"
 	}
 
 	// 3. Generate token pair
-	tokenPair, err := s.jwtService.GenerateTokenPair(u.ID, u.Email)
+	tokenPair, err := s.jwtService.GenerateTokenPair(u.ID, u.Email, string(u.Role), ipAddress)
 	if err != nil {
 		return nil, err
 	}
@@ -69,6 +72,7 @@ func (s *Service) Login(ctx context.Context, email, password, userAgent, ipAddre
 		return nil, err
 	}
 
+	metrics.LoginsTotal.WithLabelValues("success").Inc()
 	return &LoginResult{
 		AccessToken:  tokenPair.AccessToken,
 		RefreshToken: tokenPair.RefreshToken,
@@ -101,7 +105,7 @@ func (s *Service) Refresh(ctx context.Context, refreshToken, userAgent, ipAddres
 	}
 
 	// 5. Generate new token pair
-	tokenPair, err := s.jwtService.GenerateTokenPair(u.ID, u.Email)
+	tokenPair, err := s.jwtService.GenerateTokenPair(u.ID, u.Email, string(u.Role), ipAddress)
 	if err != nil {
 		return nil, err
 	}

@@ -9,7 +9,7 @@ import (
 )
 
 func newTestService() *Service {
-	return NewService(mock.NewCardRepository())
+	return NewService(mock.NewCardRepository(), nil) // nil = no encryption in tests
 }
 
 func TestIssueCard(t *testing.T) {

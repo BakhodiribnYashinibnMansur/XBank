@@ -18,25 +18,22 @@ func NewUserRepository(pool *pgxpool.Pool) *UserRepository {
 func (r *UserRepository) Create(ctx context.Context, u *user.User) error {
 	db := ExtractDBTX(ctx, r.pool)
 	query := `
-		INSERT INTO users (email, password, first_name, last_name, created_at, updated_at)
-		VALUES ($1, $2, $3, $4, $5, $6)
+		INSERT INTO users (email, password, first_name, last_name, role, created_at, updated_at)
+		VALUES ($1, $2, $3, $4, $5, $6, $7)
 		RETURNING id`
 
 	return db.QueryRow(ctx, query,
-		u.Email, u.Password, u.FirstName, u.LastName, u.CreatedAt, u.UpdatedAt,
+		u.Email, u.Password, u.FirstName, u.LastName, u.Role, u.CreatedAt, u.UpdatedAt,
 	).Scan(&u.ID)
 }
 
 func (r *UserRepository) GetByID(ctx context.Context, id string) (*user.User, error) {
 	db := ExtractDBTX(ctx, r.pool)
-	query := `
-		SELECT id, email, password, first_name, last_name, created_at, updated_at
-		FROM users WHERE id = $1`
-
 	u := &user.User{}
-	err := db.QueryRow(ctx, query, id).Scan(
-		&u.ID, &u.Email, &u.Password, &u.FirstName, &u.LastName, &u.CreatedAt, &u.UpdatedAt,
-	)
+	err := db.QueryRow(ctx,
+		`SELECT id, email, password, first_name, last_name, role, created_at, updated_at
+		 FROM users WHERE id = $1`, id,
+	).Scan(&u.ID, &u.Email, &u.Password, &u.FirstName, &u.LastName, &u.Role, &u.CreatedAt, &u.UpdatedAt)
 	if err != nil {
 		return nil, user.ErrUserNotFound
 	}
@@ -45,14 +42,11 @@ func (r *UserRepository) GetByID(ctx context.Context, id string) (*user.User, er
 
 func (r *UserRepository) GetByEmail(ctx context.Context, email string) (*user.User, error) {
 	db := ExtractDBTX(ctx, r.pool)
-	query := `
-		SELECT id, email, password, first_name, last_name, created_at, updated_at
-		FROM users WHERE email = $1`
-
 	u := &user.User{}
-	err := db.QueryRow(ctx, query, email).Scan(
-		&u.ID, &u.Email, &u.Password, &u.FirstName, &u.LastName, &u.CreatedAt, &u.UpdatedAt,
-	)
+	err := db.QueryRow(ctx,
+		`SELECT id, email, password, first_name, last_name, role, created_at, updated_at
+		 FROM users WHERE email = $1`, email,
+	).Scan(&u.ID, &u.Email, &u.Password, &u.FirstName, &u.LastName, &u.Role, &u.CreatedAt, &u.UpdatedAt)
 	if err != nil {
 		return nil, user.ErrUserNotFound
 	}
@@ -61,9 +55,7 @@ func (r *UserRepository) GetByEmail(ctx context.Context, email string) (*user.Us
 
 func (r *UserRepository) ExistsByEmail(ctx context.Context, email string) (bool, error) {
 	db := ExtractDBTX(ctx, r.pool)
-	query := `SELECT EXISTS(SELECT 1 FROM users WHERE email = $1)`
-
 	var exists bool
-	err := db.QueryRow(ctx, query, email).Scan(&exists)
+	err := db.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM users WHERE email = $1)`, email).Scan(&exists)
 	return exists, err
 }

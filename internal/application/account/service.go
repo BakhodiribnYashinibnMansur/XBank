@@ -2,11 +2,13 @@ package account
 
 import (
 	"context"
+	"fmt"
 	"time"
 
 	"github.com/BakhodiribnYashinibnMansur/XBank/internal/domain/account"
 	"github.com/BakhodiribnYashinibnMansur/XBank/internal/domain/shared"
 	"github.com/BakhodiribnYashinibnMansur/XBank/internal/infrastructure/config"
+	"github.com/BakhodiribnYashinibnMansur/XBank/internal/infrastructure/metrics"
 	accountpb "github.com/BakhodiribnYashinibnMansur/XBank/proto/accounts"
 	commonpb "github.com/BakhodiribnYashinibnMansur/XBank/proto/common"
 	"github.com/google/uuid"
@@ -22,6 +24,7 @@ type Service struct {
 	txManager shared.TxManager
 	publisher shared.EventPublisher
 	topics    config.KafkaTopicsConfig
+	auditLog  shared.AuditLog
 }
 
 func NewService(
@@ -30,6 +33,7 @@ func NewService(
 	txManager shared.TxManager,
 	publisher shared.EventPublisher,
 	topics config.KafkaTopicsConfig,
+	auditLog shared.AuditLog,
 ) *Service {
 	return &Service{
 		repo:      repo,
@@ -37,6 +41,7 @@ func NewService(
 		txManager: txManager,
 		publisher: publisher,
 		topics:    topics,
+		auditLog:  auditLog,
 	}
 }
 
@@ -61,7 +66,11 @@ func (s *Service) CreateAccount(ctx context.Context, userID string, currency sha
 		return nil, err
 	}
 
+	metrics.AccountsCreatedTotal.Inc()
 	s.publishAccountOpened(ctx, acc, userID)
+	s.audit(ctx, acc.ID, "AccountOpened", map[string]string{
+		"user_id": userID, "currency": string(currency), "account_number": acc.AccountNumber,
+	})
 	return acc, nil
 }
 
@@ -111,7 +120,11 @@ func (s *Service) Deposit(ctx context.Context, accountID string, amount int64) (
 		return nil, err
 	}
 
+	metrics.DepositsTotal.Inc()
 	s.publishAccountCredited(ctx, result, amount)
+	s.audit(ctx, result.ID, "Credited", map[string]string{
+		"amount": fmt.Sprintf("%d", amount), "currency": string(result.Balance.Currency),
+	})
 	return result, nil
 }
 
@@ -143,7 +156,11 @@ func (s *Service) Withdraw(ctx context.Context, accountID string, amount int64) 
 		return nil, err
 	}
 
+	metrics.WithdrawalsTotal.Inc()
 	s.publishAccountDebited(ctx, result, amount)
+	s.audit(ctx, result.ID, "Debited", map[string]string{
+		"amount": fmt.Sprintf("%d", amount), "currency": string(result.Balance.Currency),
+	})
 	return result, nil
 }
 
@@ -163,7 +180,9 @@ func (s *Service) CloseAccount(ctx context.Context, accountID string) error {
 		return err
 	}
 
+	metrics.AccountsClosedTotal.Inc()
 	s.publishAccountClosed(ctx, accountID)
+	s.audit(ctx, accountID, "Closed", nil)
 	return nil
 }
 
@@ -242,6 +261,21 @@ func (s *Service) saveAggregate(ctx context.Context, acc *account.Account) error
 
 	acc.ClearUncommittedEvents()
 	return nil
+}
+
+// --- Audit log helper (async, non-blocking) ---
+
+func (s *Service) audit(ctx context.Context, accountID, action string, attrs map[string]string) {
+	if s.auditLog == nil {
+		return
+	}
+	s.auditLog.Log(ctx, shared.AuditEntry{
+		AggregateType: "Account",
+		AggregateID:   accountID,
+		Action:        action,
+		Attributes:    attrs,
+		Timestamp:     time.Now(),
+	})
 }
 
 // --- Kafka publish helpers (best-effort, after DB commit) ---

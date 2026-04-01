@@ -7,6 +7,7 @@ import (
 	"github.com/BakhodiribnYashinibnMansur/XBank/internal/domain/shared"
 	"github.com/BakhodiribnYashinibnMansur/XBank/internal/domain/transfer"
 	"github.com/BakhodiribnYashinibnMansur/XBank/internal/infrastructure/config"
+	"github.com/BakhodiribnYashinibnMansur/XBank/internal/infrastructure/metrics"
 	commonpb "github.com/BakhodiribnYashinibnMansur/XBank/proto/common"
 	transferpb "github.com/BakhodiribnYashinibnMansur/XBank/proto/transfers"
 	"github.com/google/uuid"
@@ -113,10 +114,12 @@ func (s *Service) Send(ctx context.Context, fromAccountID, toAccountID string, a
 
 	if err != nil {
 		tr.Fail(err.Error())
+		metrics.TransfersTotal.WithLabelValues("failed").Inc()
 		s.publishTransferFailed(ctx, tr, err.Error())
 		return tr, err
 	}
 
+	metrics.TransfersTotal.WithLabelValues("completed").Inc()
 	s.publishTransferCompleted(ctx, tr)
 	return tr, nil
 }

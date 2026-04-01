@@ -1,0 +1,5 @@
+-- +goose Up
+ALTER TABLE users ADD COLUMN role VARCHAR(10) NOT NULL DEFAULT 'CUSTOMER';
+
+-- +goose Down
+ALTER TABLE users DROP COLUMN role;

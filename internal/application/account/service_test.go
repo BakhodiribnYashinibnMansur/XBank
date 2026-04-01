@@ -15,7 +15,8 @@ func newTestService() *Service {
 	eventRepo := mock.NewAccountEventRepository()
 	publisher := mock.NewEventPublisher()
 	txMgr := mock.NewTxManager()
-	return NewService(repo, eventRepo, txMgr, publisher, config.KafkaTopicsConfig{})
+	auditLog := mock.NewAuditLog()
+	return NewService(repo, eventRepo, txMgr, publisher, config.KafkaTopicsConfig{}, auditLog)
 }
 
 func TestCreateAccount_Success(t *testing.T) {

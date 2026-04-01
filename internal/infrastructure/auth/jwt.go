@@ -22,8 +22,10 @@ var (
 
 // TokenClaims - data stored inside the JWT
 type TokenClaims struct {
-	UserID string `json:"user_id"`
-	Email  string `json:"email"`
+	UserID    string `json:"user_id"`
+	Email     string `json:"email"`
+	Role      string `json:"role"`
+	IPAddress string `json:"ip"`  // token faqat shu IP dan ishlaydi
 	jwt.RegisteredClaims
 }
 
@@ -75,12 +77,14 @@ func NewJWTService(privateKeyPath, publicKeyPath, issuer, audience string, acces
 }
 
 // GenerateTokenPair - generates access (JWT ES256) + refresh (random) tokens
-func (s *JWTService) GenerateTokenPair(userID, email string) (*TokenPair, error) {
+func (s *JWTService) GenerateTokenPair(userID, email, role, ipAddress string) (*TokenPair, error) {
 	now := time.Now()
 
 	claims := TokenClaims{
-		UserID: userID,
-		Email:  email,
+		UserID:    userID,
+		Email:     email,
+		Role:      role,
+		IPAddress: ipAddress,
 		RegisteredClaims: jwt.RegisteredClaims{
 			Issuer:    s.issuer,
 			Audience:  jwt.ClaimStrings{s.audience},

@@ -16,7 +16,15 @@ type Config struct {
 	CORS      CORSConfig      `yaml:"cors"`
 	Kafka     KafkaConfig     `yaml:"kafka"`
 	MongoDB   MongoDBConfig   `yaml:"mongodb"`
-	Database  DatabaseConfig
+	Jaeger    JaegerConfig    `yaml:"jaeger"`
+	Redis      RedisConfig
+	Encryption EncryptionConfig
+	Database   DatabaseConfig
+}
+
+type JaegerConfig struct {
+	Enabled  bool   `yaml:"enabled"`
+	Endpoint string `yaml:"endpoint"`
 }
 
 type AppConfig struct {
@@ -56,6 +64,14 @@ type KafkaTopicsConfig struct {
 	TransferCreated  string `yaml:"transfer_created"`
 	TransferCompleted string `yaml:"transfer_completed"`
 	TransferFailed   string `yaml:"transfer_failed"`
+}
+
+type EncryptionConfig struct {
+	CardKey string // 32-byte hex key from ENV
+}
+
+type RedisConfig struct {
+	URL string // env dan o'qiladi
 }
 
 type MongoDBConfig struct {
@@ -98,6 +114,12 @@ func Load(path string) *Config {
 	// Secrets from ENV
 	cfg.Database.URL = getEnv("DATABASE_URL", "postgres://postgres:postgres@localhost:5432/xbank?sslmode=disable")
 	cfg.MongoDB.URI = getEnv("MONGODB_URI", "mongodb://localhost:27017")
+	cfg.Redis.URL = getEnv("REDIS_URL", "redis://localhost:6379/0")
+	cfg.Encryption.CardKey = getEnv("CARD_ENCRYPTION_KEY", "")
+
+	if endpoint := os.Getenv("JAEGER_ENDPOINT"); endpoint != "" {
+		cfg.Jaeger.Endpoint = endpoint
+	}
 
 	return cfg
 }

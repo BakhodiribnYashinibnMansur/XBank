@@ -7,9 +7,18 @@ services:
       - PORT=3000
       - APP_NAME=XBank
       - DATABASE_URL=postgres://postgres:postgres@db:5432/xbank?sslmode=disable
+      - MONGODB_URI=mongodb://mongo:27017
+      - JAEGER_ENDPOINT=jaeger:4318
+      - REDIS_URL=redis://redis:6379/0
     depends_on:
       db:
         condition: service_healthy
+      redis:
+        condition: service_healthy
+      mongo:
+        condition: service_started
+      jaeger:
+        condition: service_started
     restart: unless-stopped
 
   db:
@@ -29,5 +38,55 @@ services:
       timeout: 5s
       retries: 5
 
+  mongo:
+    image: mongo:7
+    ports:
+      - "27017:27017"
+    volumes:
+      - mongodata:/data/db
+
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  jaeger:
+    image: jaegertracing/all-in-one:1.62
+    ports:
+      - "16686:16686"   # Jaeger UI
+      - "4318:4318"     # OTLP HTTP receiver
+    environment:
+      COLLECTOR_OTLP_ENABLED: "true"
+
+  prometheus:
+    image: prom/prometheus:v3.4.1
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./deploy/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml
+      - promdata:/prometheus
+    depends_on:
+      - api
+
+  grafana:
+    image: grafana/grafana:12.0.0
+    ports:
+      - "3001:3000"
+    environment:
+      GF_SECURITY_ADMIN_USER: admin
+      GF_SECURITY_ADMIN_PASSWORD: admin
+    volumes:
+      - grafanadata:/var/lib/grafana
+    depends_on:
+      - prometheus
+
 volumes:
   pgdata:
+  mongodata:
+  promdata:
+  grafanadata:
