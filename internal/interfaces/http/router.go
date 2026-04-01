@@ -1,6 +1,8 @@
 package http
 
 import (
+	"time"
+
 	_ "github.com/BakhodiribnYashinibnMansur/XBank/docs/swagger"
 	infraAuth "github.com/BakhodiribnYashinibnMansur/XBank/internal/infrastructure/auth"
 	"github.com/BakhodiribnYashinibnMansur/XBank/internal/infrastructure/config"
@@ -8,6 +10,7 @@ import (
 	"github.com/BakhodiribnYashinibnMansur/XBank/internal/interfaces/http/middleware"
 	"github.com/BakhodiribnYashinibnMansur/XBank/pkg/apperror"
 	"github.com/gofiber/fiber/v2"
+	goredis "github.com/redis/go-redis/v9"
 	"github.com/gofiber/swagger"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"github.com/valyala/fasthttp/fasthttpadaptor"
@@ -23,6 +26,7 @@ func NewRouter(
 	exchangeHandler *handler.ExchangeHandler,
 	healthHandler *handler.HealthHandler,
 	jwtService *infraAuth.JWTService,
+	redisClient *goredis.Client,
 	cfg *config.Config,
 ) *fiber.App {
 	app := fiber.New(fiber.Config{
@@ -86,6 +90,7 @@ func NewRouter(
 
 	// Transfers
 	transfers := protected.Group("/transfers")
+	transfers.Use(middleware.IdempotencyMiddleware(redisClient, 24*time.Hour))
 	transfers.Post("/send", transferHandler.Send)
 	transfers.Get("/get", transferHandler.GetByID)          // ?id=xxx
 	transfers.Get("/list", transferHandler.ListByAccount)   // ?account_id=xxx

@@ -2,36 +2,47 @@ package auth
 
 import (
 	"context"
+	"encoding/json"
 	"time"
 
 	"github.com/BakhodiribnYashinibnMansur/XBank/internal/domain/session"
 	"github.com/BakhodiribnYashinibnMansur/XBank/internal/domain/user"
 	infraAuth "github.com/BakhodiribnYashinibnMansur/XBank/internal/infrastructure/auth"
 	"github.com/BakhodiribnYashinibnMansur/XBank/internal/infrastructure/metrics"
+	infraRedis "github.com/BakhodiribnYashinibnMansur/XBank/internal/infrastructure/redis"
 	"github.com/BakhodiribnYashinibnMansur/XBank/pkg/apperror"
 	"golang.org/x/crypto/bcrypt"
 )
 
 var (
 	ErrInvalidCredentials = apperror.ErrInvalidCredentials
+	ErrAccountLocked      = apperror.Forbidden(3010, "Account locked due to too many failed attempts")
 )
 
-// Service - authentication use cases
 type Service struct {
-	userRepo    user.Repository
-	sessionRepo session.Repository
-	jwtService  *infraAuth.JWTService
+	userRepo     user.Repository
+	sessionRepo  session.Repository    // DB (audit)
+	jwtService   *infraAuth.JWTService
+	sessionCache *infraRedis.SessionCache  // Redis (active check) — nil = use DB only
+	loginLimiter *infraRedis.LoginLimiter  // brute-force — nil = disabled
 }
 
-func NewService(userRepo user.Repository, sessionRepo session.Repository, jwtService *infraAuth.JWTService) *Service {
+func NewService(
+	userRepo user.Repository,
+	sessionRepo session.Repository,
+	jwtService *infraAuth.JWTService,
+	sessionCache *infraRedis.SessionCache,
+	loginLimiter *infraRedis.LoginLimiter,
+) *Service {
 	return &Service{
-		userRepo:    userRepo,
-		sessionRepo: sessionRepo,
-		jwtService:  jwtService,
+		userRepo:     userRepo,
+		sessionRepo:  sessionRepo,
+		jwtService:   jwtService,
+		sessionCache: sessionCache,
+		loginLimiter: loginLimiter,
 	}
 }
 
-// LoginResult - result of a login operation
 type LoginResult struct {
 	AccessToken  string
 	RefreshToken string
@@ -40,26 +51,35 @@ type LoginResult struct {
 
 // Login - user sign-in
 func (s *Service) Login(ctx context.Context, email, password, userAgent, ipAddress string) (*LoginResult, error) {
-	// 1. Find the user
+	// 0. Brute-force check
+	if s.loginLimiter != nil {
+		locked, _ := s.loginLimiter.IsLocked(ctx, email)
+		if locked {
+			metrics.LoginsTotal.WithLabelValues("locked").Inc()
+			return nil, ErrAccountLocked
+		}
+	}
+
+	// 1. Find user
 	u, err := s.userRepo.GetByEmail(ctx, email)
 	if err != nil {
-		metrics.LoginsTotal.WithLabelValues("failed").Inc()
-		return nil, ErrInvalidCredentials // Security: don't reveal "user not found"
+		s.recordLoginFailure(ctx, email)
+		return nil, ErrInvalidCredentials
 	}
 
-	// 2. Verify the password
+	// 2. Verify password
 	if err := bcrypt.CompareHashAndPassword([]byte(u.Password), []byte(password)); err != nil {
-		metrics.LoginsTotal.WithLabelValues("failed").Inc()
-		return nil, ErrInvalidCredentials // Security: don't reveal "wrong password"
+		s.recordLoginFailure(ctx, email)
+		return nil, ErrInvalidCredentials
 	}
 
-	// 3. Generate token pair
+	// 3. Generate tokens
 	tokenPair, err := s.jwtService.GenerateTokenPair(u.ID, u.Email, string(u.Role), ipAddress)
 	if err != nil {
 		return nil, err
 	}
 
-	// 4. Create session (refresh token is stored as a HASH)
+	// 4. Save session to DB (audit)
 	refreshTokenHash := infraAuth.HashToken(tokenPair.RefreshToken)
 	expiresAt := time.Now().Add(s.jwtService.RefreshTokenTTL())
 
@@ -67,9 +87,16 @@ func (s *Service) Login(ctx context.Context, email, password, userAgent, ipAddre
 	if err != nil {
 		return nil, err
 	}
-
 	if err := s.sessionRepo.Create(ctx, sess); err != nil {
 		return nil, err
+	}
+
+	// 5. Cache session in Redis (active check)
+	s.cacheSession(ctx, refreshTokenHash, sess, s.jwtService.RefreshTokenTTL())
+
+	// 6. Reset login attempts on success
+	if s.loginLimiter != nil {
+		s.loginLimiter.ResetAttempts(ctx, email)
 	}
 
 	metrics.LoginsTotal.WithLabelValues("success").Inc()
@@ -80,37 +107,38 @@ func (s *Service) Login(ctx context.Context, email, password, userAgent, ipAddre
 	}, nil
 }
 
-// Refresh - obtain a new token pair (via refresh token)
+// Refresh - obtain new token pair
 func (s *Service) Refresh(ctx context.Context, refreshToken, userAgent, ipAddress string) (*LoginResult, error) {
-	// 1. Find the session by refresh token hash
 	refreshTokenHash := infraAuth.HashToken(refreshToken)
-	sess, err := s.sessionRepo.GetByRefreshToken(ctx, refreshTokenHash)
+
+	// 1. Check Redis first (fast), fallback to DB
+	sess, err := s.findSession(ctx, refreshTokenHash)
 	if err != nil {
 		return nil, session.ErrSessionNotFound
 	}
 
-	// 2. Check session expiration
+	// 2. Check expiration
 	if sess.IsExpired() {
-		s.sessionRepo.DeleteByID(ctx, sess.ID)
+		s.deleteSession(ctx, sess.ID, refreshTokenHash)
 		return nil, session.ErrSessionExpired
 	}
 
-	// 3. Delete the old session (rotation - new token each time)
-	s.sessionRepo.DeleteByID(ctx, sess.ID)
+	// 3. Delete old session (rotation)
+	s.deleteSession(ctx, sess.ID, refreshTokenHash)
 
-	// 4. Get user data
+	// 4. Get user
 	u, err := s.userRepo.GetByID(ctx, sess.UserID)
 	if err != nil {
 		return nil, err
 	}
 
-	// 5. Generate new token pair
+	// 5. New tokens
 	tokenPair, err := s.jwtService.GenerateTokenPair(u.ID, u.Email, string(u.Role), ipAddress)
 	if err != nil {
 		return nil, err
 	}
 
-	// 6. Create new session
+	// 6. New session
 	newHash := infraAuth.HashToken(tokenPair.RefreshToken)
 	expiresAt := time.Now().Add(s.jwtService.RefreshTokenTTL())
 
@@ -118,10 +146,10 @@ func (s *Service) Refresh(ctx context.Context, refreshToken, userAgent, ipAddres
 	if err != nil {
 		return nil, err
 	}
-
 	if err := s.sessionRepo.Create(ctx, newSess); err != nil {
 		return nil, err
 	}
+	s.cacheSession(ctx, newHash, newSess, s.jwtService.RefreshTokenTTL())
 
 	return &LoginResult{
 		AccessToken:  tokenPair.AccessToken,
@@ -130,17 +158,80 @@ func (s *Service) Refresh(ctx context.Context, refreshToken, userAgent, ipAddres
 	}, nil
 }
 
-// Logout - end a single session
+// Logout - end session + blacklist access token
 func (s *Service) Logout(ctx context.Context, refreshToken string) error {
 	refreshTokenHash := infraAuth.HashToken(refreshToken)
 	sess, err := s.sessionRepo.GetByRefreshToken(ctx, refreshTokenHash)
 	if err != nil {
-		return nil // Don't return an error even if session is not found
+		return nil
 	}
-	return s.sessionRepo.DeleteByID(ctx, sess.ID)
+	s.deleteSession(ctx, sess.ID, refreshTokenHash)
+	return nil
 }
 
 // LogoutAll - end all sessions
 func (s *Service) LogoutAll(ctx context.Context, userID string) error {
 	return s.sessionRepo.DeleteAllByUserID(ctx, userID)
+}
+
+// BlacklistToken - add access token to blacklist (called on logout)
+func (s *Service) BlacklistToken(ctx context.Context, tokenJTI string, remainingTTL time.Duration) {
+	if s.sessionCache != nil {
+		s.sessionCache.BlacklistToken(ctx, tokenJTI, remainingTTL)
+	}
+}
+
+// IsTokenBlacklisted - check if access token was revoked
+func (s *Service) IsTokenBlacklisted(ctx context.Context, tokenJTI string) bool {
+	if s.sessionCache == nil {
+		return false
+	}
+	blacklisted, _ := s.sessionCache.IsBlacklisted(ctx, tokenJTI)
+	return blacklisted
+}
+
+// --- Internal helpers ---
+
+func (s *Service) recordLoginFailure(ctx context.Context, email string) {
+	metrics.LoginsTotal.WithLabelValues("failed").Inc()
+	if s.loginLimiter != nil {
+		s.loginLimiter.RecordFailure(ctx, email)
+	}
+}
+
+// cacheSession - save session to Redis
+func (s *Service) cacheSession(ctx context.Context, tokenHash string, sess *session.Session, ttl time.Duration) {
+	if s.sessionCache == nil {
+		return
+	}
+	data, err := json.Marshal(sess)
+	if err != nil {
+		return
+	}
+	s.sessionCache.SetSession(ctx, tokenHash, string(data), ttl)
+}
+
+// findSession - check Redis first, fallback to DB
+func (s *Service) findSession(ctx context.Context, refreshTokenHash string) (*session.Session, error) {
+	// Try Redis
+	if s.sessionCache != nil {
+		cached, err := s.sessionCache.GetSession(ctx, refreshTokenHash)
+		if err == nil && cached != "" {
+			var sess session.Session
+			if json.Unmarshal([]byte(cached), &sess) == nil {
+				return &sess, nil
+			}
+		}
+	}
+
+	// Fallback to DB
+	return s.sessionRepo.GetByRefreshToken(ctx, refreshTokenHash)
+}
+
+// deleteSession - remove from both Redis and DB
+func (s *Service) deleteSession(ctx context.Context, sessionID, tokenHash string) {
+	if s.sessionCache != nil {
+		s.sessionCache.DeleteSession(ctx, tokenHash)
+	}
+	s.sessionRepo.DeleteByID(ctx, sessionID)
 }

@@ -39,7 +39,7 @@ func setupAuthTest(t *testing.T) (*Service, *mock.UserRepository) {
 	userRepo := mock.NewUserRepository()
 	sessionRepo := mock.NewSessionRepository()
 	jwtService := newTestJWTService(t)
-	svc := NewService(userRepo, sessionRepo, jwtService)
+	svc := NewService(userRepo, sessionRepo, jwtService, nil, nil) // nil = no Redis in tests
 
 	// Create a test user with hashed password
 	hashed, _ := bcrypt.GenerateFromPassword([]byte("password123"), bcrypt.DefaultCost)

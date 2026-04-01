@@ -72,7 +72,13 @@ func main() {
 	if err != nil {
 		logger.Log.Warn("Redis unavailable", zap.Error(err))
 	}
-	_ = redisClient // TODO: wire into session cache and rate limiter
+	var sessionCache *infraRedis.SessionCache
+	var loginLimiter *infraRedis.LoginLimiter
+	if redisClient != nil {
+		sessionCache = infraRedis.NewSessionCache(redisClient)
+		loginLimiter = infraRedis.NewLoginLimiter(redisClient, 5, 15*time.Minute, 15*time.Minute)
+		logger.Log.Info("Redis session cache + login limiter enabled")
+	}
 
 	jwtService, err := infraAuth.NewJWTService(
 		cfg.JWT.PrivateKeyPath, cfg.JWT.PublicKeyPath,
@@ -112,7 +118,7 @@ func main() {
 
 	// Application
 	userService := userApp.NewService(userRepo)
-	authService := authApp.NewService(userRepo, sessionRepo, jwtService)
+	authService := authApp.NewService(userRepo, sessionRepo, jwtService, sessionCache, loginLimiter)
 	accountService := accountApp.NewService(accountRepo, accountEventRepo, txManager, kafkaProducer, cfg.Kafka.Topics, auditLog)
 	transferService := transferApp.NewService(transferRepo, transferEventRepo, accountRepo, txManager, kafkaProducer, cfg.Kafka.Topics)
 	var cardEncryptor *infraCrypto.AESEncryptor
@@ -148,7 +154,7 @@ func main() {
 	}
 	healthHandler := handler.NewHealthHandler(pool, mongoClient, kafkaBroker)
 
-	app := router.NewRouter(userHandler, authHandler, accountHandler, transferHandler, cardHandler, benHandler, exchHandler, healthHandler, jwtService, cfg)
+	app := router.NewRouter(userHandler, authHandler, accountHandler, transferHandler, cardHandler, benHandler, exchHandler, healthHandler, jwtService, redisClient, cfg)
 
 	// Graceful shutdown: wait for termination signal (Ctrl+C or docker stop)
 	quit := make(chan os.Signal, 1)
