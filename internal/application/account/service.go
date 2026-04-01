@@ -46,7 +46,9 @@ func NewService(
 }
 
 // CreateAccount - open a new account (event sourced)
-func (s *Service) CreateAccount(ctx context.Context, userID string, currency shared.Currency) (*account.Account, error) {
+func (s *Service) CreateAccount(ctx context.Context, userID string, currency shared.Currency) (result *account.Account, err error) {
+	defer metrics.ObserveService("AccountService", "CreateAccount", time.Now(), &err)
+
 	acc, err := account.NewAccount(userID, currency)
 	if err != nil {
 		return nil, err
@@ -75,12 +77,15 @@ func (s *Service) CreateAccount(ctx context.Context, userID string, currency sha
 }
 
 // GetByID - read from projection (fast)
-func (s *Service) GetByID(ctx context.Context, id string) (*account.Account, error) {
+func (s *Service) GetByID(ctx context.Context, id string) (result *account.Account, err error) {
+	defer metrics.ObserveService("AccountService", "GetByID", time.Now(), &err)
 	return s.repo.GetByID(ctx, id)
 }
 
 // ListByUserID - read from projection (paginated)
-func (s *Service) ListByUserID(ctx context.Context, userID string, limit, offset int) ([]*account.Account, int64, error) {
+func (s *Service) ListByUserID(ctx context.Context, userID string, limit, offset int) (_ []*account.Account, _ int64, err error) {
+	defer metrics.ObserveService("AccountService", "ListByUserID", time.Now(), &err)
+
 	accounts, err := s.repo.ListByUserID(ctx, userID, limit, offset)
 	if err != nil {
 		return nil, 0, err
@@ -93,10 +98,12 @@ func (s *Service) ListByUserID(ctx context.Context, userID string, limit, offset
 }
 
 // Deposit - event sourced deposit
-func (s *Service) Deposit(ctx context.Context, accountID string, amount int64) (*account.Account, error) {
+func (s *Service) Deposit(ctx context.Context, accountID string, amount int64) (_ *account.Account, err error) {
+	defer metrics.ObserveService("AccountService", "Deposit", time.Now(), &err)
+
 	var result *account.Account
 
-	err := s.txManager.WithTx(ctx, func(txCtx context.Context) error {
+	err = s.txManager.WithTx(ctx, func(txCtx context.Context) error {
 		acc, err := s.loadAggregate(txCtx, accountID)
 		if err != nil {
 			return err
@@ -129,10 +136,12 @@ func (s *Service) Deposit(ctx context.Context, accountID string, amount int64) (
 }
 
 // Withdraw - event sourced withdrawal
-func (s *Service) Withdraw(ctx context.Context, accountID string, amount int64) (*account.Account, error) {
+func (s *Service) Withdraw(ctx context.Context, accountID string, amount int64) (_ *account.Account, err error) {
+	defer metrics.ObserveService("AccountService", "Withdraw", time.Now(), &err)
+
 	var result *account.Account
 
-	err := s.txManager.WithTx(ctx, func(txCtx context.Context) error {
+	err = s.txManager.WithTx(ctx, func(txCtx context.Context) error {
 		acc, err := s.loadAggregate(txCtx, accountID)
 		if err != nil {
 			return err
@@ -165,8 +174,10 @@ func (s *Service) Withdraw(ctx context.Context, accountID string, amount int64) 
 }
 
 // CloseAccount - event sourced close
-func (s *Service) CloseAccount(ctx context.Context, accountID string) error {
-	err := s.txManager.WithTx(ctx, func(txCtx context.Context) error {
+func (s *Service) CloseAccount(ctx context.Context, accountID string) (err error) {
+	defer metrics.ObserveService("AccountService", "CloseAccount", time.Now(), &err)
+
+	err = s.txManager.WithTx(ctx, func(txCtx context.Context) error {
 		acc, err := s.loadAggregate(txCtx, accountID)
 		if err != nil {
 			return err
@@ -187,7 +198,9 @@ func (s *Service) CloseAccount(ctx context.Context, accountID string) error {
 }
 
 // GetHistory - load all domain events for an account
-func (s *Service) GetHistory(ctx context.Context, accountID string) ([]account.Event, error) {
+func (s *Service) GetHistory(ctx context.Context, accountID string) (_ []account.Event, err error) {
+	defer metrics.ObserveService("AccountService", "GetHistory", time.Now(), &err)
+
 	events, err := s.eventRepo.LoadEvents(ctx, accountID)
 	if err != nil {
 		return nil, err

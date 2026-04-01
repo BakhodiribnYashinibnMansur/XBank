@@ -4,7 +4,11 @@
 // Labels follow Prometheus best practices.
 package metrics
 
-import "github.com/prometheus/client_golang/prometheus"
+import (
+	"time"
+
+	"github.com/prometheus/client_golang/prometheus"
+)
 
 // ── HTTP Metrics ─────────────────────────────────────
 
@@ -185,6 +189,48 @@ var (
 	)
 )
 
+// ── Application Service Metrics ──────────────────────
+
+var (
+	// ServiceOperationDuration — application service method latency in seconds.
+	ServiceOperationDuration = prometheus.NewHistogramVec(
+		prometheus.HistogramOpts{
+			Namespace: "xbank",
+			Subsystem: "service",
+			Name:      "operation_duration_seconds",
+			Help:      "Application service operation duration in seconds",
+			Buckets:   []float64{0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1, 2.5, 5},
+		},
+		[]string{"service", "operation"},
+	)
+
+	// ServiceOperationsTotal — total application service operations by status.
+	ServiceOperationsTotal = prometheus.NewCounterVec(
+		prometheus.CounterOpts{
+			Namespace: "xbank",
+			Subsystem: "service",
+			Name:      "operations_total",
+			Help:      "Total number of application service operations",
+		},
+		[]string{"service", "operation", "status"},
+	)
+)
+
+// ObserveService records service operation duration and increments the counter.
+// Usage:
+//
+//	defer metrics.ObserveService("AccountService", "CreateAccount", time.Now(), &err)
+func ObserveService(service, operation string, start time.Time, err *error) {
+	duration := time.Since(start).Seconds()
+	ServiceOperationDuration.WithLabelValues(service, operation).Observe(duration)
+
+	status := "ok"
+	if err != nil && *err != nil {
+		status = "error"
+	}
+	ServiceOperationsTotal.WithLabelValues(service, operation, status).Inc()
+}
+
 // Register registers all custom metrics with the default Prometheus registry.
 func Register() {
 	// HTTP
@@ -209,4 +255,8 @@ func Register() {
 	prometheus.MustRegister(DepositsTotal)
 	prometheus.MustRegister(WithdrawalsTotal)
 	prometheus.MustRegister(LoginsTotal)
+
+	// Service
+	prometheus.MustRegister(ServiceOperationDuration)
+	prometheus.MustRegister(ServiceOperationsTotal)
 }

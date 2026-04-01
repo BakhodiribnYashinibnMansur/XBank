@@ -35,6 +35,7 @@ import (
 	infraMongo "github.com/BakhodiribnYashinibnMansur/XBank/internal/infrastructure/mongodb"
 	"github.com/BakhodiribnYashinibnMansur/XBank/internal/infrastructure/postgres"
 	infraRedis "github.com/BakhodiribnYashinibnMansur/XBank/internal/infrastructure/redis"
+	infraSSE "github.com/BakhodiribnYashinibnMansur/XBank/internal/infrastructure/sse"
 	"github.com/BakhodiribnYashinibnMansur/XBank/internal/domain/shared"
 	"github.com/BakhodiribnYashinibnMansur/XBank/internal/interfaces/http/handler"
 	"github.com/BakhodiribnYashinibnMansur/XBank/pkg/logger"
@@ -158,13 +159,16 @@ func main() {
 	fraudService := fraudApp.NewService(fraudRepo)
 	fraudHandler := handler.NewFraudHandler(fraudService)
 
+	sseHub := infraSSE.NewHub()
+	notificationHandler := handler.NewNotificationHandler(sseHub)
+
 	kafkaBroker := ""
 	if len(cfg.Kafka.Brokers) > 0 {
 		kafkaBroker = cfg.Kafka.Brokers[0]
 	}
 	healthHandler := handler.NewHealthHandler(pool, mongoClient, kafkaBroker)
 
-	app := router.NewRouter(userHandler, authHandler, accountHandler, transferHandler, cardHandler, benHandler, exchHandler, kycHandler, fraudHandler, healthHandler, jwtService, redisClient, cfg)
+	app := router.NewRouter(userHandler, authHandler, accountHandler, transferHandler, cardHandler, benHandler, exchHandler, kycHandler, fraudHandler, notificationHandler, healthHandler, jwtService, redisClient, cfg)
 
 	// Graceful shutdown: wait for termination signal (Ctrl+C or docker stop)
 	quit := make(chan os.Signal, 1)

@@ -3,9 +3,11 @@ package reconciliation
 import (
 	"context"
 	"fmt"
+	"time"
 
 	"github.com/BakhodiribnYashinibnMansur/XBank/internal/domain/account"
 	"github.com/BakhodiribnYashinibnMansur/XBank/internal/domain/ledger"
+	"github.com/BakhodiribnYashinibnMansur/XBank/internal/infrastructure/metrics"
 	"github.com/BakhodiribnYashinibnMansur/XBank/pkg/logger"
 	"go.uber.org/zap"
 )
@@ -29,7 +31,9 @@ func NewService(accountRepo account.Repository, ledgerRepo ledger.Repository) *S
 }
 
 // CheckAccount - verify account balance matches ledger sum
-func (s *Service) CheckAccount(ctx context.Context, accountID string) (*Result, error) {
+func (s *Service) CheckAccount(ctx context.Context, accountID string) (_ *Result, err error) {
+	defer metrics.ObserveService("ReconciliationService", "CheckAccount", time.Now(), &err)
+
 	acc, err := s.accountRepo.GetByID(ctx, accountID)
 	if err != nil {
 		return nil, err
@@ -60,7 +64,9 @@ func (s *Service) CheckAccount(ctx context.Context, accountID string) (*Result, 
 }
 
 // CheckAllAccounts - run reconciliation for all accounts of a user
-func (s *Service) CheckAllAccounts(ctx context.Context, userID string) ([]*Result, error) {
+func (s *Service) CheckAllAccounts(ctx context.Context, userID string) (_ []*Result, err error) {
+	defer metrics.ObserveService("ReconciliationService", "CheckAllAccounts", time.Now(), &err)
+
 	accounts, err := s.accountRepo.ListByUserID(ctx, userID, 1000, 0)
 	if err != nil {
 		return nil, err

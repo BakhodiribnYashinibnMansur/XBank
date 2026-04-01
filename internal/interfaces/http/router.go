@@ -26,6 +26,7 @@ func NewRouter(
 	exchangeHandler *handler.ExchangeHandler,
 	kycHandler *handler.KYCHandler,
 	fraudHandler *handler.FraudHandler,
+	notificationHandler *handler.NotificationHandler,
 	healthHandler *handler.HealthHandler,
 	jwtService *infraAuth.JWTService,
 	redisClient *goredis.Client,
@@ -123,6 +124,10 @@ func NewRouter(
 	bens.Post("/add", beneficiaryHandler.Add)
 	bens.Get("/list", beneficiaryHandler.List)
 	bens.Delete("/delete", beneficiaryHandler.Delete)
+
+	// SSE Notifications
+	notifications := protected.Group("/notifications")
+	notifications.Get("/stream", notificationHandler.Stream)
 
 	// KYC (customer)
 	kycRoutes := protected.Group("/kyc")

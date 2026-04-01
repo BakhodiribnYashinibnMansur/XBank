@@ -2,8 +2,10 @@ package user
 
 import (
 	"context"
+	"time"
 
 	"github.com/BakhodiribnYashinibnMansur/XBank/internal/domain/user"
+	"github.com/BakhodiribnYashinibnMansur/XBank/internal/infrastructure/metrics"
 	"golang.org/x/crypto/bcrypt"
 )
 
@@ -19,7 +21,9 @@ func NewService(repo user.Repository) *Service {
 }
 
 // Register - register a new user (use case)
-func (s *Service) Register(ctx context.Context, email, password, firstName, lastName string) (*user.User, error) {
+func (s *Service) Register(ctx context.Context, email, password, firstName, lastName string) (_ *user.User, err error) {
+	defer metrics.ObserveService("UserService", "Register", time.Now(), &err)
+
 	// 1. Check that the email is not already taken
 	exists, err := s.repo.ExistsByEmail(ctx, email)
 	if err != nil {
@@ -50,6 +54,7 @@ func (s *Service) Register(ctx context.Context, email, password, firstName, last
 }
 
 // GetByID - get a user by ID
-func (s *Service) GetByID(ctx context.Context, id string) (*user.User, error) {
+func (s *Service) GetByID(ctx context.Context, id string) (_ *user.User, err error) {
+	defer metrics.ObserveService("UserService", "GetByID", time.Now(), &err)
 	return s.repo.GetByID(ctx, id)
 }

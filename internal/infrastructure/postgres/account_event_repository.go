@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/BakhodiribnYashinibnMansur/XBank/internal/domain/account"
+	"github.com/BakhodiribnYashinibnMansur/XBank/internal/infrastructure/metrics"
 	"github.com/BakhodiribnYashinibnMansur/XBank/pkg/apperror"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
@@ -21,6 +22,7 @@ func NewAccountEventRepository(pool *pgxpool.Pool) *AccountEventRepository {
 
 // Append - EAV: each event field = separate row
 func (r *AccountEventRepository) Append(ctx context.Context, aggregateID string, expectedVersion int, events []account.Event) error {
+	start := time.Now()
 	db := ExtractDBTX(ctx, r.pool)
 
 	for _, e := range events {
@@ -38,10 +40,12 @@ func (r *AccountEventRepository) Append(ctx context.Context, aggregateID string,
 				aggregateID, string(e.Type), e.Version, key, val, e.OccurredAt,
 			)
 			if err != nil {
+				metrics.ObserveQuery("AccountEventRepo.Append", start, err)
 				return apperror.ErrConcurrencyConflict
 			}
 		}
 	}
+	metrics.ObserveQuery("AccountEventRepo.Append", start, nil)
 	return nil
 }
 
@@ -56,6 +60,7 @@ func (r *AccountEventRepository) LoadEventsFromVersion(ctx context.Context, aggr
 }
 
 func (r *AccountEventRepository) loadEvents(ctx context.Context, aggregateID string, fromVersion int) ([]account.Event, error) {
+	start := time.Now()
 	db := ExtractDBTX(ctx, r.pool)
 
 	rows, err := db.Query(ctx,
@@ -66,6 +71,7 @@ func (r *AccountEventRepository) loadEvents(ctx context.Context, aggregateID str
 		aggregateID, fromVersion,
 	)
 	if err != nil {
+		metrics.ObserveQuery("AccountEventRepo.LoadEvents", start, err)
 		return nil, err
 	}
 	defer rows.Close()
@@ -125,11 +131,13 @@ func (r *AccountEventRepository) loadEvents(ctx context.Context, aggregateID str
 		})
 	}
 
+	metrics.ObserveQuery("AccountEventRepo.LoadEvents", start, nil)
 	return events, nil
 }
 
 // SaveSnapshot - store as event_type = 'Snapshot'
 func (r *AccountEventRepository) SaveSnapshot(ctx context.Context, snapshot account.Snapshot) error {
+	start := time.Now()
 	db := ExtractDBTX(ctx, r.pool)
 
 	// Delete old snapshot rows for this aggregate
@@ -138,6 +146,7 @@ func (r *AccountEventRepository) SaveSnapshot(ctx context.Context, snapshot acco
 		snapshot.AggregateID,
 	)
 	if err != nil {
+		metrics.ObserveQuery("AccountEventRepo.SaveSnapshot", start, err)
 		return err
 	}
 
@@ -157,14 +166,17 @@ func (r *AccountEventRepository) SaveSnapshot(ctx context.Context, snapshot acco
 			snapshot.AggregateID, snapshot.Version, key, val, snapshot.CreatedAt,
 		)
 		if err != nil {
+			metrics.ObserveQuery("AccountEventRepo.SaveSnapshot", start, err)
 			return err
 		}
 	}
+	metrics.ObserveQuery("AccountEventRepo.SaveSnapshot", start, nil)
 	return nil
 }
 
 // LoadSnapshot - load latest snapshot from EAV rows
 func (r *AccountEventRepository) LoadSnapshot(ctx context.Context, aggregateID string) (*account.Snapshot, error) {
+	start := time.Now()
 	db := ExtractDBTX(ctx, r.pool)
 
 	rows, err := db.Query(ctx,
@@ -174,6 +186,7 @@ func (r *AccountEventRepository) LoadSnapshot(ctx context.Context, aggregateID s
 		aggregateID,
 	)
 	if err != nil {
+		metrics.ObserveQuery("AccountEventRepo.LoadSnapshot", start, err)
 		return nil, nil
 	}
 	defer rows.Close()
@@ -186,6 +199,7 @@ func (r *AccountEventRepository) LoadSnapshot(ctx context.Context, aggregateID s
 	for rows.Next() {
 		var key, val string
 		if err := rows.Scan(&version, &key, &val, &createdAt); err != nil {
+			metrics.ObserveQuery("AccountEventRepo.LoadSnapshot", start, err)
 			return nil, err
 		}
 		attrs[key] = val
@@ -193,6 +207,7 @@ func (r *AccountEventRepository) LoadSnapshot(ctx context.Context, aggregateID s
 	}
 
 	if !found {
+		metrics.ObserveQuery("AccountEventRepo.LoadSnapshot", start, nil)
 		return nil, nil
 	}
 

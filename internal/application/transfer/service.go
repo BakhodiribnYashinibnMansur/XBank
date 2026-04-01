@@ -2,6 +2,7 @@ package transfer
 
 import (
 	"context"
+	"time"
 
 	"github.com/BakhodiribnYashinibnMansur/XBank/internal/domain/account"
 	"github.com/BakhodiribnYashinibnMansur/XBank/internal/domain/shared"
@@ -43,7 +44,9 @@ func NewService(
 }
 
 // Send - transfer funds between accounts (event sourced)
-func (s *Service) Send(ctx context.Context, fromAccountID, toAccountID string, amount int64, currency shared.Currency, description string) (*transfer.Transfer, error) {
+func (s *Service) Send(ctx context.Context, fromAccountID, toAccountID string, amount int64, currency shared.Currency, description string) (_ *transfer.Transfer, err error) {
+	defer metrics.ObserveService("TransferService", "Send", time.Now(), &err)
+
 	money, err := shared.NewMoney(amount, currency)
 	if err != nil {
 		return nil, err
@@ -125,12 +128,15 @@ func (s *Service) Send(ctx context.Context, fromAccountID, toAccountID string, a
 }
 
 // GetByID - get a transfer by ID
-func (s *Service) GetByID(ctx context.Context, id string) (*transfer.Transfer, error) {
+func (s *Service) GetByID(ctx context.Context, id string) (_ *transfer.Transfer, err error) {
+	defer metrics.ObserveService("TransferService", "GetByID", time.Now(), &err)
 	return s.transferRepo.GetByID(ctx, id)
 }
 
 // ListByAccountID - get transfers for an account with pagination
-func (s *Service) ListByAccountID(ctx context.Context, accountID string, limit, offset int) ([]*transfer.Transfer, int64, error) {
+func (s *Service) ListByAccountID(ctx context.Context, accountID string, limit, offset int) (_ []*transfer.Transfer, _ int64, err error) {
+	defer metrics.ObserveService("TransferService", "ListByAccountID", time.Now(), &err)
+
 	transfers, err := s.transferRepo.ListByAccountID(ctx, accountID, limit, offset)
 	if err != nil {
 		return nil, 0, err
@@ -143,7 +149,9 @@ func (s *Service) ListByAccountID(ctx context.Context, accountID string, limit, 
 }
 
 // GetHistory - load all domain events for a transfer
-func (s *Service) GetHistory(ctx context.Context, transferID string) ([]transfer.Event, error) {
+func (s *Service) GetHistory(ctx context.Context, transferID string) (_ []transfer.Event, err error) {
+	defer metrics.ObserveService("TransferService", "GetHistory", time.Now(), &err)
+
 	events, err := s.eventRepo.LoadEvents(ctx, transferID)
 	if err != nil {
 		return nil, err

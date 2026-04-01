@@ -2,8 +2,10 @@ package fraud
 
 import (
 	"context"
+	"time"
 
 	"github.com/BakhodiribnYashinibnMansur/XBank/internal/domain/fraud"
+	"github.com/BakhodiribnYashinibnMansur/XBank/internal/infrastructure/metrics"
 )
 
 type Service struct {
@@ -15,7 +17,9 @@ func NewService(repo fraud.Repository) *Service {
 }
 
 // Evaluate - run fraud/AML check on a transfer
-func (s *Service) Evaluate(ctx context.Context, transferID, userID string, amount int64, flags []string) (*fraud.Check, error) {
+func (s *Service) Evaluate(ctx context.Context, transferID, userID string, amount int64, flags []string) (_ *fraud.Check, err error) {
+	defer metrics.ObserveService("FraudService", "Evaluate", time.Now(), &err)
+
 	check := fraud.NewCheck(transferID, userID, amount, flags)
 	if err := s.repo.Create(ctx, check); err != nil {
 		return nil, err
@@ -30,11 +34,14 @@ func (s *Service) ShouldBlock(ctx context.Context, transferID, userID string, am
 	return check.Action == fraud.ActionBlock, check
 }
 
-func (s *Service) GetByTransferID(ctx context.Context, transferID string) (*fraud.Check, error) {
+func (s *Service) GetByTransferID(ctx context.Context, transferID string) (_ *fraud.Check, err error) {
+	defer metrics.ObserveService("FraudService", "GetByTransferID", time.Now(), &err)
 	return s.repo.GetByTransferID(ctx, transferID)
 }
 
-func (s *Service) ListFlagged(ctx context.Context, limit, offset int) ([]*fraud.Check, int64, error) {
+func (s *Service) ListFlagged(ctx context.Context, limit, offset int) (_ []*fraud.Check, _ int64, err error) {
+	defer metrics.ObserveService("FraudService", "ListFlagged", time.Now(), &err)
+
 	items, err := s.repo.ListFlagged(ctx, limit, offset)
 	if err != nil {
 		return nil, 0, err

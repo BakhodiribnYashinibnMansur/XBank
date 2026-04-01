@@ -50,7 +50,9 @@ type LoginResult struct {
 }
 
 // Login - user sign-in
-func (s *Service) Login(ctx context.Context, email, password, userAgent, ipAddress string) (*LoginResult, error) {
+func (s *Service) Login(ctx context.Context, email, password, userAgent, ipAddress string) (_ *LoginResult, err error) {
+	defer metrics.ObserveService("AuthService", "Login", time.Now(), &err)
+
 	// 0. Brute-force check
 	if s.loginLimiter != nil {
 		locked, _ := s.loginLimiter.IsLocked(ctx, email)
@@ -108,7 +110,9 @@ func (s *Service) Login(ctx context.Context, email, password, userAgent, ipAddre
 }
 
 // Refresh - obtain new token pair
-func (s *Service) Refresh(ctx context.Context, refreshToken, userAgent, ipAddress string) (*LoginResult, error) {
+func (s *Service) Refresh(ctx context.Context, refreshToken, userAgent, ipAddress string) (_ *LoginResult, err error) {
+	defer metrics.ObserveService("AuthService", "Refresh", time.Now(), &err)
+
 	refreshTokenHash := infraAuth.HashToken(refreshToken)
 
 	// 1. Check Redis first (fast), fallback to DB
@@ -159,7 +163,9 @@ func (s *Service) Refresh(ctx context.Context, refreshToken, userAgent, ipAddres
 }
 
 // Logout - end session + blacklist access token
-func (s *Service) Logout(ctx context.Context, refreshToken string) error {
+func (s *Service) Logout(ctx context.Context, refreshToken string) (err error) {
+	defer metrics.ObserveService("AuthService", "Logout", time.Now(), &err)
+
 	refreshTokenHash := infraAuth.HashToken(refreshToken)
 	sess, err := s.sessionRepo.GetByRefreshToken(ctx, refreshTokenHash)
 	if err != nil {
@@ -170,7 +176,8 @@ func (s *Service) Logout(ctx context.Context, refreshToken string) error {
 }
 
 // LogoutAll - end all sessions
-func (s *Service) LogoutAll(ctx context.Context, userID string) error {
+func (s *Service) LogoutAll(ctx context.Context, userID string) (err error) {
+	defer metrics.ObserveService("AuthService", "LogoutAll", time.Now(), &err)
 	return s.sessionRepo.DeleteAllByUserID(ctx, userID)
 }
 

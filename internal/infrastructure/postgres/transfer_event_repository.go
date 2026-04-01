@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/BakhodiribnYashinibnMansur/XBank/internal/domain/transfer"
+	"github.com/BakhodiribnYashinibnMansur/XBank/internal/infrastructure/metrics"
 	"github.com/BakhodiribnYashinibnMansur/XBank/pkg/apperror"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
@@ -20,6 +21,7 @@ func NewTransferEventRepository(pool *pgxpool.Pool) *TransferEventRepository {
 
 // Append - persist transfer events as EAV rows
 func (r *TransferEventRepository) Append(ctx context.Context, aggregateID string, expectedVersion int, events []transfer.Event) error {
+	start := time.Now()
 	db := ExtractDBTX(ctx, r.pool)
 
 	for _, e := range events {
@@ -37,15 +39,18 @@ func (r *TransferEventRepository) Append(ctx context.Context, aggregateID string
 				aggregateID, string(e.Type), e.Version, key, val, e.OccurredAt,
 			)
 			if err != nil {
+				metrics.ObserveQuery("TransferEventRepo.Append", start, err)
 				return apperror.ErrConcurrencyConflict
 			}
 		}
 	}
+	metrics.ObserveQuery("TransferEventRepo.Append", start, nil)
 	return nil
 }
 
 // LoadEvents - load all transfer events, reconstruct from EAV rows
 func (r *TransferEventRepository) LoadEvents(ctx context.Context, aggregateID string) ([]transfer.Event, error) {
+	start := time.Now()
 	db := ExtractDBTX(ctx, r.pool)
 
 	rows, err := db.Query(ctx,
@@ -56,6 +61,7 @@ func (r *TransferEventRepository) LoadEvents(ctx context.Context, aggregateID st
 		aggregateID,
 	)
 	if err != nil {
+		metrics.ObserveQuery("TransferEventRepo.LoadEvents", start, err)
 		return nil, err
 	}
 	defer rows.Close()
@@ -114,6 +120,7 @@ func (r *TransferEventRepository) LoadEvents(ctx context.Context, aggregateID st
 		})
 	}
 
+	metrics.ObserveQuery("TransferEventRepo.LoadEvents", start, nil)
 	return events, nil
 }
 
