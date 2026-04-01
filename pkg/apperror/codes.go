@@ -99,6 +99,14 @@ var (
 	ErrConcurrencyConflict = Conflict(8501, "Resource was modified by another request, please retry")
 )
 
+// --- HMAC / Request Signing (38xx) ---
+var (
+	ErrHMACMissing          = Unauthorized(3800, "Request signature required: X-Signature and X-Signature-Timestamp headers are missing")
+	ErrHMACTimestampInvalid = BadRequest(3801, "Invalid X-Signature-Timestamp: must be a Unix timestamp")
+	ErrHMACTimestampExpired = Unauthorized(3802, "Request signature expired: timestamp is too old or too far in the future")
+	ErrHMACSignatureInvalid = Unauthorized(3803, "Request signature verification failed")
+)
+
 // --- Infrastructure (9xxx) ---
 var (
 	ErrDatabase  = Internal(9001, "Database operation failed")

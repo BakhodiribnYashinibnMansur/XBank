@@ -61,8 +61,9 @@ func NewRouter(
 	app.Get("/health/live", healthHandler.Live)
 	app.Get("/health/ready", healthHandler.Ready)
 
-	// Swagger UI: http://localhost:3000/swagger/
-	app.Get("/swagger/*", swagger.HandlerDefault)
+	// API Documentation
+	app.Get("/swagger/*", swagger.HandlerDefault)  // Swagger UI: http://localhost:3000/swagger/
+	app.Get("/docs", handler.RedocHandler())        // ReDoc UI:   http://localhost:3000/docs
 
 	v1 := app.Group("/api/v1")
 
