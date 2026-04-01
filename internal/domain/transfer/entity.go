@@ -115,6 +115,36 @@ func (t *Transfer) ClearUncommittedEvents() {
 	t.uncommittedEvents = nil
 }
 
+// LoadFromSnapshot - rebuild transfer from snapshot + remaining events
+func LoadFromSnapshot(snap SnapshotState, version int, events []Event) *Transfer {
+	t := &Transfer{
+		FromAccountID: snap.FromAccountID,
+		ToAccountID:   snap.ToAccountID,
+		Amount:        shared.Money{Amount: snap.Amount, Currency: shared.Currency(snap.Currency)},
+		Status:        Status(snap.Status),
+		Description:   snap.Description,
+		FailureReason: snap.FailureReason,
+		Version:       version,
+	}
+	for _, e := range events {
+		t.Apply(e)
+	}
+	return t
+}
+
+// ToSnapshotState - convert current state for snapshot persistence
+func (t *Transfer) ToSnapshotState() SnapshotState {
+	return SnapshotState{
+		FromAccountID: t.FromAccountID,
+		ToAccountID:   t.ToAccountID,
+		Amount:        t.Amount.Amount,
+		Currency:      string(t.Amount.Currency),
+		Status:        string(t.Status),
+		Description:   t.Description,
+		FailureReason: t.FailureReason,
+	}
+}
+
 // --- Internal helpers ---
 
 func (t *Transfer) raise(eventType EventType, data EventData) {

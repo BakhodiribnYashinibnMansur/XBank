@@ -12,6 +12,7 @@ import (
 type Config struct {
 	App       AppConfig       `yaml:"app"`
 	JWT       JWTConfig       `yaml:"jwt"`
+	HMAC      HMACConfig      `yaml:"hmac"`
 	RateLimit RateLimitConfig `yaml:"rate_limit"`
 	CORS      CORSConfig      `yaml:"cors"`
 	Kafka     KafkaConfig     `yaml:"kafka"`
@@ -66,8 +67,17 @@ type KafkaTopicsConfig struct {
 	TransferFailed   string `yaml:"transfer_failed"`
 }
 
+type HMACConfig struct {
+	MaxClockSkewMinutes int `yaml:"max_clock_skew_minutes"`
+}
+
+func (h *HMACConfig) MaxClockSkew() time.Duration {
+	return time.Duration(h.MaxClockSkewMinutes) * time.Minute
+}
+
 type EncryptionConfig struct {
-	CardKey string // 32-byte hex key from ENV
+	CardKey    string // 32-byte hex key from ENV
+	HMACSecret string // 32-byte hex key from ENV
 }
 
 type RedisConfig struct {
@@ -121,6 +131,7 @@ func Load(path string) *Config {
 	cfg.MongoDB.URI = getEnv("MONGODB_URI", "mongodb://localhost:27017")
 	cfg.Redis.URL = getEnv("REDIS_URL", "redis://localhost:6379/0")
 	cfg.Encryption.CardKey = getEnv("CARD_ENCRYPTION_KEY", "")
+	cfg.Encryption.HMACSecret = getEnv("HMAC_SECRET", "")
 
 	if endpoint := os.Getenv("JAEGER_ENDPOINT"); endpoint != "" {
 		cfg.Jaeger.Endpoint = endpoint

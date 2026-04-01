@@ -135,96 +135,74 @@ func (r *AccountEventRepository) loadEvents(ctx context.Context, aggregateID str
 	return events, nil
 }
 
-// SaveSnapshot - store as event_type = 'Snapshot'
+// SaveSnapshot - upsert into dedicated account_snapshots table
 func (r *AccountEventRepository) SaveSnapshot(ctx context.Context, snapshot account.Snapshot) error {
 	start := time.Now()
 	db := ExtractDBTX(ctx, r.pool)
 
-	// Delete old snapshot rows for this aggregate
 	_, err := db.Exec(ctx,
-		`DELETE FROM account_events WHERE aggregate_id = $1 AND event_type = 'Snapshot'`,
-		snapshot.AggregateID,
+		`INSERT INTO account_snapshots (aggregate_id, version, user_id, account_number, balance, currency, status, created_at)
+		 VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+		 ON CONFLICT (aggregate_id)
+		 DO UPDATE SET version = EXCLUDED.version,
+		               user_id = EXCLUDED.user_id,
+		               account_number = EXCLUDED.account_number,
+		               balance = EXCLUDED.balance,
+		               currency = EXCLUDED.currency,
+		               status = EXCLUDED.status,
+		               created_at = EXCLUDED.created_at`,
+		snapshot.AggregateID, snapshot.Version,
+		snapshot.State.UserID, snapshot.State.AccountNumber,
+		snapshot.State.Balance, snapshot.State.Currency, snapshot.State.Status,
+		snapshot.CreatedAt,
 	)
 	if err != nil {
 		metrics.ObserveQuery("AccountEventRepo.SaveSnapshot", start, err)
 		return err
 	}
 
-	// Insert snapshot as EAV rows (version = snapshot version, special event_type)
-	attrs := map[string]string{
-		"user_id":        snapshot.State.UserID,
-		"account_number": snapshot.State.AccountNumber,
-		"balance":        strconv.FormatInt(snapshot.State.Balance, 10),
-		"currency":       snapshot.State.Currency,
-		"status":         snapshot.State.Status,
-	}
-
-	for key, val := range attrs {
-		_, err := db.Exec(ctx,
-			`INSERT INTO account_events (aggregate_id, event_type, version, attr_key, attr_value, occurred_at)
-			 VALUES ($1, 'Snapshot', $2, $3, $4, $5)`,
-			snapshot.AggregateID, snapshot.Version, key, val, snapshot.CreatedAt,
-		)
-		if err != nil {
-			metrics.ObserveQuery("AccountEventRepo.SaveSnapshot", start, err)
-			return err
-		}
-	}
 	metrics.ObserveQuery("AccountEventRepo.SaveSnapshot", start, nil)
 	return nil
 }
 
-// LoadSnapshot - load latest snapshot from EAV rows
+// LoadSnapshot - load latest snapshot from dedicated table
 func (r *AccountEventRepository) LoadSnapshot(ctx context.Context, aggregateID string) (*account.Snapshot, error) {
 	start := time.Now()
 	db := ExtractDBTX(ctx, r.pool)
 
-	rows, err := db.Query(ctx,
-		`SELECT version, attr_key, attr_value, occurred_at
-		 FROM account_events
-		 WHERE aggregate_id = $1 AND event_type = 'Snapshot'`,
-		aggregateID,
-	)
-	if err != nil {
-		metrics.ObserveQuery("AccountEventRepo.LoadSnapshot", start, err)
-		return nil, nil
-	}
-	defer rows.Close()
-
-	attrs := make(map[string]string)
+	var snap account.Snapshot
+	var userID, accountNumber, currency, status string
+	var balance int64
 	var version int
 	var createdAt time.Time
-	found := false
 
-	for rows.Next() {
-		var key, val string
-		if err := rows.Scan(&version, &key, &val, &createdAt); err != nil {
-			metrics.ObserveQuery("AccountEventRepo.LoadSnapshot", start, err)
-			return nil, err
-		}
-		attrs[key] = val
-		found = true
-	}
+	err := db.QueryRow(ctx,
+		`SELECT version, user_id, account_number, balance, currency, status, created_at
+		 FROM account_snapshots
+		 WHERE aggregate_id = $1`,
+		aggregateID,
+	).Scan(&version, &userID, &accountNumber, &balance, &currency, &status, &createdAt)
 
-	if !found {
+	if err != nil {
 		metrics.ObserveQuery("AccountEventRepo.LoadSnapshot", start, nil)
-		return nil, nil
+		return nil, nil // not found = no snapshot
 	}
 
-	balance, _ := strconv.ParseInt(attrs["balance"], 10, 64)
-
-	return &account.Snapshot{
+	snap = account.Snapshot{
 		AggregateID: aggregateID,
 		Version:     version,
 		State: account.SnapshotState{
-			UserID:        attrs["user_id"],
-			AccountNumber: attrs["account_number"],
+			UserID:        userID,
+			AccountNumber: accountNumber,
 			Balance:       balance,
-			Currency:      attrs["currency"],
-			Status:        attrs["status"],
+			Currency:      currency,
+			Status:        status,
 		},
 		CreatedAt: createdAt,
-	}, nil
+	}
+
+	metrics.ObserveQuery("AccountEventRepo.LoadSnapshot", start, nil)
+	return &snap, nil
 }
 
 // --- EAV conversion helpers ---

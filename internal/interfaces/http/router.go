@@ -6,6 +6,7 @@ import (
 	_ "github.com/BakhodiribnYashinibnMansur/XBank/docs/swagger"
 	infraAuth "github.com/BakhodiribnYashinibnMansur/XBank/internal/infrastructure/auth"
 	"github.com/BakhodiribnYashinibnMansur/XBank/internal/infrastructure/config"
+	infraCrypto "github.com/BakhodiribnYashinibnMansur/XBank/internal/infrastructure/crypto"
 	"github.com/BakhodiribnYashinibnMansur/XBank/internal/interfaces/http/handler"
 	"github.com/BakhodiribnYashinibnMansur/XBank/internal/interfaces/http/middleware"
 	"github.com/BakhodiribnYashinibnMansur/XBank/pkg/apperror"
@@ -30,6 +31,7 @@ func NewRouter(
 	healthHandler *handler.HealthHandler,
 	jwtService *infraAuth.JWTService,
 	adminWhitelist *middleware.DynamicIPWhitelist,
+	hmacSigner *infraCrypto.HMACSigner,
 	redisClient *goredis.Client,
 	cfg *config.Config,
 ) *fiber.App {
@@ -98,16 +100,18 @@ func NewRouter(
 	accountAdmin := accounts.Group("", middleware.RequireRole("ADMIN", "TELLER"))
 	accountAdmin.Post("/close", accountHandler.Close)
 
-	// Transfers
+	// Transfers (HMAC signed + idempotent)
 	transfers := protected.Group("/transfers")
+	transfers.Use(middleware.HMACMiddleware(hmacSigner))
 	transfers.Use(middleware.IdempotencyMiddleware(redisClient, 24*time.Hour))
 	transfers.Post("/send", transferHandler.Send)
 	transfers.Get("/get", transferHandler.GetByID)          // ?id=xxx
 	transfers.Get("/list", transferHandler.ListByAccount)   // ?account_id=xxx
 	transfers.Get("/history", transferHandler.History)      // ?id=xxx
 
-	// Cards — RESTful design
+	// Cards — RESTful design (HMAC signed)
 	cards := protected.Group("/cards")
+	cards.Use(middleware.HMACMiddleware(hmacSigner))
 	cards.Post("/", cardHandler.Issue)              // POST /cards
 	cards.Get("/", cardHandler.ByAccount)            // GET  /cards?account_id=xxx
 	cards.Get("/:id", cardHandler.ByID)              // GET  /cards/:id

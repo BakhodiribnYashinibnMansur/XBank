@@ -137,6 +137,18 @@ func main() {
 	}
 	cardService := cardApp.NewService(cardRepo, cardEncryptor)
 
+	// HMAC signer for request integrity (transfers, cards)
+	var hmacSigner *infraCrypto.HMACSigner
+	if cfg.Encryption.HMACSecret != "" {
+		hmacSigner, err = infraCrypto.NewHMACSigner(cfg.Encryption.HMACSecret, cfg.HMAC.MaxClockSkew())
+		if err != nil {
+			logger.Log.Fatal("HMAC secret noto'g'ri", zap.Error(err))
+		}
+		logger.Log.Info("HMAC request signing enabled")
+	} else {
+		logger.Log.Warn("HMAC request signing disabled (HMAC_SECRET not set)")
+	}
+
 	// Interfaces
 	userHandler := handler.NewUserHandler(userService)
 	authHandler := handler.NewAuthHandler(authService)
@@ -171,7 +183,7 @@ func main() {
 
 	adminWhitelist := middleware.NewDynamicIPWhitelist(pool, 5*time.Minute)
 
-	app := router.NewRouter(userHandler, authHandler, accountHandler, transferHandler, cardHandler, benHandler, exchHandler, kycHandler, fraudHandler, notificationHandler, healthHandler, jwtService, adminWhitelist, redisClient, cfg)
+	app := router.NewRouter(userHandler, authHandler, accountHandler, transferHandler, cardHandler, benHandler, exchHandler, kycHandler, fraudHandler, notificationHandler, healthHandler, jwtService, adminWhitelist, hmacSigner, redisClient, cfg)
 
 	// Graceful shutdown: wait for termination signal (Ctrl+C or docker stop)
 	quit := make(chan os.Signal, 1)

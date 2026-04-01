@@ -42,3 +42,24 @@ func (r *TransferEventRepository) LoadEvents(ctx context.Context, aggregateID st
 	defer r.mu.RUnlock()
 	return r.events[aggregateID], nil
 }
+
+func (r *TransferEventRepository) LoadEventsFromVersion(ctx context.Context, aggregateID string, fromVersion int) ([]transfer.Event, error) {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+
+	var result []transfer.Event
+	for _, e := range r.events[aggregateID] {
+		if e.Version > fromVersion {
+			result = append(result, e)
+		}
+	}
+	return result, nil
+}
+
+func (r *TransferEventRepository) SaveSnapshot(ctx context.Context, snapshot transfer.Snapshot) error {
+	return nil
+}
+
+func (r *TransferEventRepository) LoadSnapshot(ctx context.Context, aggregateID string) (*transfer.Snapshot, error) {
+	return nil, nil
+}

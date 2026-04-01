@@ -22,7 +22,9 @@ services:
     restart: unless-stopped
 
   db:
-    image: postgres:17-alpine
+    build:
+      context: .
+      dockerfile: Dockerfile.postgres
     ports:
       - "5432:5432"
     environment:
