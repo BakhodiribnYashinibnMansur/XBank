@@ -113,6 +113,11 @@ func Load(path string) *Config {
 
 	// Secrets from ENV
 	cfg.Database.URL = getEnv("DATABASE_URL", "postgres://postgres:postgres@localhost:5432/xbank?sslmode=disable")
+
+	// Warn if SSL is disabled in production
+	if !strings.Contains(cfg.Database.URL, "sslmode=verify") && getEnv("APP_ENV", "development") == "production" {
+		log.Println("WARNING: DATABASE_URL does not use sslmode=verify-full. This is insecure for production!")
+	}
 	cfg.MongoDB.URI = getEnv("MONGODB_URI", "mongodb://localhost:27017")
 	cfg.Redis.URL = getEnv("REDIS_URL", "redis://localhost:6379/0")
 	cfg.Encryption.CardKey = getEnv("CARD_ENCRYPTION_KEY", "")

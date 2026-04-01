@@ -18,6 +18,12 @@ type DBTX interface {
 }
 
 type txKey struct{}
+type rlsUserKey struct{}
+
+// WithRLSUser injects the user ID into context for Row-Level Security
+func WithRLSUser(ctx context.Context, userID string) context.Context {
+	return context.WithValue(ctx, rlsUserKey{}, userID)
+}
 
 // injectTx stores the transaction in context.
 func injectTx(ctx context.Context, tx pgx.Tx) context.Context {
@@ -51,6 +57,13 @@ func (m *TxManager) WithTx(ctx context.Context, fn func(ctx context.Context) err
 		return fmt.Errorf("begin tx: %w", err)
 	}
 	defer tx.Rollback(ctx)
+
+	// Set RLS user context if available
+	if userID, ok := ctx.Value(rlsUserKey{}).(string); ok && userID != "" {
+		if _, err := tx.Exec(ctx, fmt.Sprintf("SET LOCAL app.current_user_id = '%s'", userID)); err != nil {
+			return fmt.Errorf("set rls user: %w", err)
+		}
+	}
 
 	txCtx := injectTx(ctx, tx)
 	if err := fn(txCtx); err != nil {

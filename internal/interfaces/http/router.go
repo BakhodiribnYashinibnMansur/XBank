@@ -40,6 +40,8 @@ func NewRouter(
 	// Middleware chain
 	app.Use(middleware.RecoveryMiddleware())
 	app.Use(middleware.RequestIDMiddleware())
+	app.Use(middleware.HelmetMiddleware())
+	app.Use(middleware.CSRFMiddleware())
 	app.Use(middleware.TracingMiddleware())
 	app.Use(middleware.CORSMiddleware(cfg.CORS.Origins()))
 	app.Use(middleware.RateLimitMiddleware(cfg.RateLimit.MaxRequests, cfg.RateLimit.Window()))
@@ -71,7 +73,7 @@ func NewRouter(
 	auth.Post("/logout", authHandler.Logout)
 
 	// Protected
-	protected := v1.Group("", middleware.AuthMiddleware(jwtService))
+	protected := v1.Group("", middleware.AuthMiddleware(jwtService), middleware.RLSMiddleware())
 	protected.Post("/auth/logout-all", authHandler.LogoutAll)
 
 	// Users: GET /api/v1/users/get?id=xxx
