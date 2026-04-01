@@ -61,3 +61,24 @@ func (r *UserRepository) ExistsByEmail(ctx context.Context, email string) (bool,
 	}
 	return false, nil
 }
+
+func (r *UserRepository) UpdatePassword(ctx context.Context, userID, hashedPassword string) error {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	if u, ok := r.users[userID]; ok {
+		u.Password = hashedPassword
+	}
+	return nil
+}
+
+func (r *UserRepository) Anonymize(ctx context.Context, userID string) error {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	if u, ok := r.users[userID]; ok {
+		u.Email = "deleted_" + userID
+		u.FirstName = "[DELETED]"
+		u.LastName = "[DELETED]"
+		u.Password = ""
+	}
+	return nil
+}

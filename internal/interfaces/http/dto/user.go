@@ -10,6 +10,11 @@ type RegisterRequest struct {
 	LastName  string `json:"last_name"`
 }
 
+type ChangePasswordRequest struct {
+	OldPassword string `json:"old_password"`
+	NewPassword string `json:"new_password"`
+}
+
 // UserResponse - user data (password is NEVER returned!)
 type UserResponse struct {
 	ID        string    `json:"id"`

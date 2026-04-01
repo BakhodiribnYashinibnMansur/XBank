@@ -53,6 +53,42 @@ func (s *Service) Register(ctx context.Context, email, password, firstName, last
 	return u, nil
 }
 
+// ChangePassword - change user password (verify old, set new)
+func (s *Service) ChangePassword(ctx context.Context, userID, oldPassword, newPassword string) (err error) {
+	defer metrics.ObserveService("UserService", "ChangePassword", time.Now(), &err)
+
+	u, err := s.repo.GetByID(ctx, userID)
+	if err != nil {
+		return err
+	}
+
+	if err := bcrypt.CompareHashAndPassword([]byte(u.Password), []byte(oldPassword)); err != nil {
+		return user.ErrInvalidPassword
+	}
+
+	if len(newPassword) < 8 {
+		return user.ErrInvalidPassword
+	}
+
+	hashed, err := bcrypt.GenerateFromPassword([]byte(newPassword), bcrypt.DefaultCost)
+	if err != nil {
+		return err
+	}
+
+	return s.repo.UpdatePassword(ctx, userID, string(hashed))
+}
+
+// ExportData - GDPR: export all user data
+func (s *Service) ExportData(ctx context.Context, userID string) (*user.User, error) {
+	return s.repo.GetByID(ctx, userID)
+}
+
+// DeleteAccount - GDPR: anonymize user data (not hard delete, for audit retention)
+func (s *Service) DeleteAccount(ctx context.Context, userID string) (err error) {
+	defer metrics.ObserveService("UserService", "DeleteAccount", time.Now(), &err)
+	return s.repo.Anonymize(ctx, userID)
+}
+
 // GetByID - get a user by ID
 func (s *Service) GetByID(ctx context.Context, id string) (_ *user.User, err error) {
 	defer metrics.ObserveService("UserService", "GetByID", time.Now(), &err)

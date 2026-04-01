@@ -69,4 +69,6 @@ type Repository interface {
 	GetByID(ctx context.Context, id string) (*User, error)
 	GetByEmail(ctx context.Context, email string) (*User, error)
 	ExistsByEmail(ctx context.Context, email string) (bool, error)
+	UpdatePassword(ctx context.Context, userID, hashedPassword string) error
+	Anonymize(ctx context.Context, userID string) error // GDPR right to erasure
 }

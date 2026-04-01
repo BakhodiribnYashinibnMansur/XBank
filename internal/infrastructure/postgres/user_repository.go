@@ -74,3 +74,22 @@ func (r *UserRepository) ExistsByEmail(ctx context.Context, email string) (bool,
 	metrics.ObserveQuery("UserRepo.ExistsByEmail", start, err)
 	return exists, err
 }
+
+func (r *UserRepository) UpdatePassword(ctx context.Context, userID, hashedPassword string) error {
+	start := time.Now()
+	db := ExtractDBTX(ctx, r.pool)
+	_, err := db.Exec(ctx, `UPDATE users SET password = $1, updated_at = NOW() WHERE id = $2`, hashedPassword, userID)
+	metrics.ObserveQuery("UserRepo.UpdatePassword", start, err)
+	return err
+}
+
+func (r *UserRepository) Anonymize(ctx context.Context, userID string) error {
+	start := time.Now()
+	db := ExtractDBTX(ctx, r.pool)
+	_, err := db.Exec(ctx,
+		`UPDATE users SET email = 'deleted_' || id, password = '', first_name = '[DELETED]', last_name = '[DELETED]', updated_at = NOW() WHERE id = $1`,
+		userID,
+	)
+	metrics.ObserveQuery("UserRepo.Anonymize", start, err)
+	return err
+}

@@ -10,8 +10,8 @@ import (
 	"github.com/BakhodiribnYashinibnMansur/XBank/internal/interfaces/http/middleware"
 	"github.com/BakhodiribnYashinibnMansur/XBank/pkg/apperror"
 	"github.com/gofiber/fiber/v2"
-	goredis "github.com/redis/go-redis/v9"
 	"github.com/gofiber/swagger"
+	goredis "github.com/redis/go-redis/v9"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"github.com/valyala/fasthttp/fasthttpadaptor"
 )
@@ -29,6 +29,7 @@ func NewRouter(
 	notificationHandler *handler.NotificationHandler,
 	healthHandler *handler.HealthHandler,
 	jwtService *infraAuth.JWTService,
+	adminWhitelist *middleware.DynamicIPWhitelist,
 	redisClient *goredis.Client,
 	cfg *config.Config,
 ) *fiber.App {
@@ -79,6 +80,9 @@ func NewRouter(
 	// Users: GET /api/v1/users/get?id=xxx
 	users := protected.Group("/users")
 	users.Get("/get", userHandler.GetByID)
+	users.Post("/change-password", userHandler.ChangePassword)
+	users.Get("/me/data-export", userHandler.ExportData)
+	users.Delete("/me/delete", userHandler.DeleteAccount)
 
 	// Accounts
 	accounts := protected.Group("/accounts")
@@ -136,8 +140,8 @@ func NewRouter(
 	kycRoutes.Post("/submit", kycHandler.Submit)
 	kycRoutes.Get("/status", kycHandler.Status)
 
-	// Admin routes (ADMIN only)
-	admin := protected.Group("/admin", middleware.RequireRole("ADMIN"))
+	// Admin routes (ADMIN only + IP whitelist)
+	admin := protected.Group("/admin", middleware.RequireRole("ADMIN"), adminWhitelist.Middleware())
 
 	// KYC admin
 	adminKYC := admin.Group("/kyc")

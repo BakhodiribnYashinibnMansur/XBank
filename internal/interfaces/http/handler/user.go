@@ -83,3 +83,62 @@ func (h *UserHandler) GetByID(c *fiber.Ctx) error {
 		CreatedAt: u.CreatedAt,
 	})
 }
+
+// ChangePassword godoc
+// @Summary      Change password
+// @Tags         Users
+// @Accept       json
+// @Produce      json
+// @Param        body body dto.ChangePasswordRequest true "Old and new password"
+// @Success      200 {object} map[string]string
+// @Security     BearerAuth
+// @Router       /users/change-password [post]
+func (h *UserHandler) ChangePassword(c *fiber.Ctx) error {
+	var req dto.ChangePasswordRequest
+	if err := c.BodyParser(&req); err != nil {
+		return apperror.ErrInvalidJSON
+	}
+	if req.OldPassword == "" || req.NewPassword == "" {
+		return apperror.ErrMissingField.WithMessage("old_password and new_password are required")
+	}
+
+	userID := c.Locals("user_id").(string)
+	if err := h.service.ChangePassword(c.Context(), userID, req.OldPassword, req.NewPassword); err != nil {
+		return err
+	}
+
+	return c.JSON(fiber.Map{"message": "Password changed"})
+}
+
+// ExportData godoc
+// @Summary      Export user data (GDPR)
+// @Tags         Users
+// @Produce      json
+// @Success      200 {object} dto.UserResponse
+// @Security     BearerAuth
+// @Router       /users/me/data-export [get]
+func (h *UserHandler) ExportData(c *fiber.Ctx) error {
+	userID := c.Locals("user_id").(string)
+	u, err := h.service.ExportData(c.Context(), userID)
+	if err != nil {
+		return err
+	}
+	return c.JSON(dto.UserResponse{
+		ID: u.ID, Email: u.Email, FirstName: u.FirstName, LastName: u.LastName, CreatedAt: u.CreatedAt,
+	})
+}
+
+// DeleteAccount godoc
+// @Summary      Delete account / anonymize data (GDPR)
+// @Tags         Users
+// @Produce      json
+// @Success      200 {object} map[string]string
+// @Security     BearerAuth
+// @Router       /users/me/delete [delete]
+func (h *UserHandler) DeleteAccount(c *fiber.Ctx) error {
+	userID := c.Locals("user_id").(string)
+	if err := h.service.DeleteAccount(c.Context(), userID); err != nil {
+		return err
+	}
+	return c.JSON(fiber.Map{"message": "Account data anonymized"})
+}
