@@ -1,0 +1,46 @@
+syntax = "proto3";
+
+package xbank.accounts;
+
+option go_package = "github.com/BakhodiribnYashinibnMansur/XBank/proto/accounts";
+
+import "common/metadata.proto";
+
+// AccountOpened - published when a new account is created
+message AccountOpened {
+  xbank.common.Metadata metadata = 1;
+  string account_id     = 2;
+  string user_id        = 3;
+  string account_number = 4;
+  string currency       = 5;
+}
+
+// AccountCredited - published when funds are deposited
+message AccountCredited {
+  xbank.common.Metadata metadata = 1;
+  string account_id = 2;
+  int64  amount     = 3;
+  string currency   = 4;
+  int64  balance    = 5;
+}
+
+// AccountDebited - published when funds are withdrawn
+message AccountDebited {
+  xbank.common.Metadata metadata = 1;
+  string account_id = 2;
+  int64  amount     = 3;
+  string currency   = 4;
+  int64  balance    = 5;
+}
+
+// AccountFrozen - published when account is frozen
+message AccountFrozen {
+  xbank.common.Metadata metadata = 1;
+  string account_id = 2;
+}
+
+// AccountClosed - published when account is closed
+message AccountClosed {
+  xbank.common.Metadata metadata = 1;
+  string account_id = 2;
+}

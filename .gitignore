@@ -17,6 +17,8 @@
 !pkg/**
 !migrations/
 !migrations/**
+!proto/
+!proto/**
 
 # Go module files
 !go.mod

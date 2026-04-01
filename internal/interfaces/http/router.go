@@ -64,23 +64,25 @@ func NewRouter(
 	accounts.Post("/deposit", accountHandler.Deposit)   // body: {account_id, amount}
 	accounts.Post("/withdraw", accountHandler.Withdraw) // body: {account_id, amount}
 	accounts.Post("/close", accountHandler.Close)       // body: {account_id}
+	accounts.Get("/history", accountHandler.History)    // ?id=xxx
 
 	// Transfers
 	transfers := protected.Group("/transfers")
 	transfers.Post("/send", transferHandler.Send)
 	transfers.Get("/get", transferHandler.GetByID)          // ?id=xxx
 	transfers.Get("/list", transferHandler.ListByAccount)   // ?account_id=xxx
+	transfers.Get("/history", transferHandler.History)      // ?id=xxx
 
-	// Cards
+	// Cards — RESTful design
 	cards := protected.Group("/cards")
-	cards.Post("/issue", cardHandler.Issue)
-	cards.Post("/activate", cardHandler.Activate)
-	cards.Post("/verify-pin", cardHandler.VerifyPIN)
-	cards.Post("/change-pin", cardHandler.ChangePIN)
-	cards.Post("/block", cardHandler.Block)
-	cards.Post("/unblock", cardHandler.Unblock)
-	cards.Get("/get", cardHandler.GetByID)    // ?id=xxx
-	cards.Get("/list", cardHandler.List)       // ?account_id=xxx
+	cards.Post("/", cardHandler.Issue)              // POST /cards
+	cards.Get("/", cardHandler.ByAccount)            // GET  /cards?account_id=xxx
+	cards.Get("/:id", cardHandler.ByID)              // GET  /cards/:id
+	cards.Post("/:id/activate", cardHandler.Activate)
+	cards.Post("/:id/verify-pin", cardHandler.VerifyPIN)
+	cards.Put("/:id/pin", cardHandler.ChangePIN)
+	cards.Post("/:id/block", cardHandler.Block)
+	cards.Post("/:id/unblock", cardHandler.Unblock)
 
 	return app
 }

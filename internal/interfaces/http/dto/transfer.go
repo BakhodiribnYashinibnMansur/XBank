@@ -10,6 +10,14 @@ type SendTransferRequest struct {
 	Description   string `json:"description"`
 }
 
+type TransferEventResponse struct {
+	ID        string      `json:"id"`
+	Type      string      `json:"type"`
+	Data      interface{} `json:"data"`
+	Version   int         `json:"version"`
+	OccuredAt time.Time   `json:"occurred_at"`
+}
+
 type TransferResponse struct {
 	ID            string    `json:"id"`
 	FromAccountID string    `json:"from_account_id"`

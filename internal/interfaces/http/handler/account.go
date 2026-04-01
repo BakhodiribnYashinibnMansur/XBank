@@ -192,6 +192,40 @@ func (h *AccountHandler) Close(c *fiber.Ctx) error {
 	return c.JSON(fiber.Map{"message": "Account closed"})
 }
 
+// History godoc
+// @Summary      Get account event history
+// @Tags         Accounts
+// @Produce      json
+// @Param        id query string true "Account ID"
+// @Success      200 {array} dto.AccountEventResponse
+// @Failure      404 {object} apperror.ErrorResponse
+// @Security     BearerAuth
+// @Router       /accounts/history [get]
+func (h *AccountHandler) History(c *fiber.Ctx) error {
+	id := c.Query("id")
+	if id == "" {
+		return apperror.ErrMissingField.WithMessage("id query parameter is required")
+	}
+
+	events, err := h.service.GetHistory(c.Context(), id)
+	if err != nil {
+		return err
+	}
+
+	var resp []dto.AccountEventResponse
+	for _, e := range events {
+		resp = append(resp, dto.AccountEventResponse{
+			ID:        e.ID,
+			Type:      string(e.Type),
+			Data:      e.Data,
+			Version:   e.Version,
+			OccuredAt: e.OccurredAt,
+		})
+	}
+
+	return c.JSON(resp)
+}
+
 func toAccountResponse(a *account.Account) dto.AccountResponse {
 	return dto.AccountResponse{
 		ID:            a.ID,

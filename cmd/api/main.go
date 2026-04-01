@@ -23,6 +23,7 @@ import (
 	userApp "github.com/BakhodiribnYashinibnMansur/XBank/internal/application/user"
 	infraAuth "github.com/BakhodiribnYashinibnMansur/XBank/internal/infrastructure/auth"
 	"github.com/BakhodiribnYashinibnMansur/XBank/internal/infrastructure/config"
+	infraKafka "github.com/BakhodiribnYashinibnMansur/XBank/internal/infrastructure/kafka"
 	"github.com/BakhodiribnYashinibnMansur/XBank/internal/infrastructure/postgres"
 	"github.com/BakhodiribnYashinibnMansur/XBank/internal/interfaces/http/handler"
 	"github.com/BakhodiribnYashinibnMansur/XBank/pkg/logger"
@@ -58,14 +59,19 @@ func main() {
 	userRepo := postgres.NewUserRepository(pool)
 	sessionRepo := postgres.NewSessionRepository(pool)
 	accountRepo := postgres.NewAccountRepository(pool)
+	accountEventRepo := postgres.NewAccountEventRepository(pool)
 	transferRepo := postgres.NewTransferRepository(pool)
+	transferEventRepo := postgres.NewTransferEventRepository(pool)
 	cardRepo := postgres.NewCardRepository(pool)
+
+	// Kafka producer
+	kafkaProducer := infraKafka.NewProducer(cfg.Kafka.Brokers)
 
 	// Application
 	userService := userApp.NewService(userRepo)
 	authService := authApp.NewService(userRepo, sessionRepo, jwtService)
-	accountService := accountApp.NewService(accountRepo, txManager)
-	transferService := transferApp.NewService(transferRepo, accountRepo, txManager)
+	accountService := accountApp.NewService(accountRepo, accountEventRepo, txManager, kafkaProducer, cfg.Kafka.Topics)
+	transferService := transferApp.NewService(transferRepo, transferEventRepo, accountRepo, txManager, kafkaProducer, cfg.Kafka.Topics)
 	cardService := cardApp.NewService(cardRepo)
 
 	// Interfaces
@@ -102,7 +108,12 @@ func main() {
 		logger.Log.Error("Server shutdown xatolik", zap.Error(err))
 	}
 
-	// 2. Close DB connections
+	// 2. Close Kafka producer
+	if err := kafkaProducer.Close(); err != nil {
+		logger.Log.Error("Kafka producer yopishda xatolik", zap.Error(err))
+	}
+
+	// 3. Close DB connections
 	pool.Close()
 
 	logger.Log.Info("Server toza yopildi")

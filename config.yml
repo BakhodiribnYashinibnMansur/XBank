@@ -18,3 +18,19 @@ cors:
   allowed_origins:
     - http://localhost:3000
     - http://localhost:5173
+
+mongodb:
+  database: xbank_audit
+
+kafka:
+  brokers:
+    - localhost:9092
+  topics:
+    account_opened: xbank.accounts.opened
+    account_credited: xbank.accounts.credited
+    account_debited: xbank.accounts.debited
+    account_frozen: xbank.accounts.frozen
+    account_closed: xbank.accounts.closed
+    transfer_created: xbank.transfers.created
+    transfer_completed: xbank.transfers.completed
+    transfer_failed: xbank.transfers.failed

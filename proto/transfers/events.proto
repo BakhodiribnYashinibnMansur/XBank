@@ -1,0 +1,39 @@
+syntax = "proto3";
+
+package xbank.transfers;
+
+option go_package = "github.com/BakhodiribnYashinibnMansur/XBank/proto/transfers";
+
+import "common/metadata.proto";
+
+// TransferCreated - published when a new transfer is initiated
+message TransferCreated {
+  xbank.common.Metadata metadata = 1;
+  string transfer_id    = 2;
+  string from_account_id = 3;
+  string to_account_id   = 4;
+  int64  amount          = 5;
+  string currency        = 6;
+  string description     = 7;
+}
+
+// TransferCompleted - published when transfer succeeds
+message TransferCompleted {
+  xbank.common.Metadata metadata = 1;
+  string transfer_id    = 2;
+  string from_account_id = 3;
+  string to_account_id   = 4;
+  int64  amount          = 5;
+  string currency        = 6;
+}
+
+// TransferFailed - published when transfer fails
+message TransferFailed {
+  xbank.common.Metadata metadata = 1;
+  string transfer_id    = 2;
+  string from_account_id = 3;
+  string to_account_id   = 4;
+  int64  amount          = 5;
+  string currency        = 6;
+  string reason          = 7;
+}

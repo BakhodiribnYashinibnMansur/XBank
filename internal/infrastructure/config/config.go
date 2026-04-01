@@ -14,6 +14,8 @@ type Config struct {
 	JWT       JWTConfig       `yaml:"jwt"`
 	RateLimit RateLimitConfig `yaml:"rate_limit"`
 	CORS      CORSConfig      `yaml:"cors"`
+	Kafka     KafkaConfig     `yaml:"kafka"`
+	MongoDB   MongoDBConfig   `yaml:"mongodb"`
 	Database  DatabaseConfig
 }
 
@@ -38,6 +40,27 @@ type RateLimitConfig struct {
 
 type CORSConfig struct {
 	AllowedOrigins []string `yaml:"allowed_origins"`
+}
+
+type KafkaConfig struct {
+	Brokers []string          `yaml:"brokers"`
+	Topics  KafkaTopicsConfig `yaml:"topics"`
+}
+
+type KafkaTopicsConfig struct {
+	AccountOpened    string `yaml:"account_opened"`
+	AccountCredited  string `yaml:"account_credited"`
+	AccountDebited   string `yaml:"account_debited"`
+	AccountFrozen    string `yaml:"account_frozen"`
+	AccountClosed    string `yaml:"account_closed"`
+	TransferCreated  string `yaml:"transfer_created"`
+	TransferCompleted string `yaml:"transfer_completed"`
+	TransferFailed   string `yaml:"transfer_failed"`
+}
+
+type MongoDBConfig struct {
+	URI      string // env dan o'qiladi
+	Database string `yaml:"database"`
 }
 
 type DatabaseConfig struct {
@@ -74,6 +97,7 @@ func Load(path string) *Config {
 
 	// Secrets from ENV
 	cfg.Database.URL = getEnv("DATABASE_URL", "postgres://postgres:postgres@localhost:5432/xbank?sslmode=disable")
+	cfg.MongoDB.URI = getEnv("MONGODB_URI", "mongodb://localhost:27017")
 
 	return cfg
 }

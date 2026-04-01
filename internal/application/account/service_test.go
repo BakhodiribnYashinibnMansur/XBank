@@ -6,13 +6,16 @@ import (
 
 	"github.com/BakhodiribnYashinibnMansur/XBank/internal/domain/account"
 	"github.com/BakhodiribnYashinibnMansur/XBank/internal/domain/shared"
+	"github.com/BakhodiribnYashinibnMansur/XBank/internal/infrastructure/config"
 	"github.com/BakhodiribnYashinibnMansur/XBank/internal/infrastructure/mock"
 )
 
 func newTestService() *Service {
 	repo := mock.NewAccountRepository()
+	eventRepo := mock.NewAccountEventRepository()
+	publisher := mock.NewEventPublisher()
 	txMgr := mock.NewTxManager()
-	return NewService(repo, txMgr)
+	return NewService(repo, eventRepo, txMgr, publisher, config.KafkaTopicsConfig{})
 }
 
 func TestCreateAccount_Success(t *testing.T) {

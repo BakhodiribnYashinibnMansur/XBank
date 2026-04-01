@@ -113,6 +113,40 @@ func (h *TransferHandler) ListByAccount(c *fiber.Ctx) error {
 	})
 }
 
+// History godoc
+// @Summary      Get transfer event history
+// @Tags         Transfers
+// @Produce      json
+// @Param        id query string true "Transfer ID"
+// @Success      200 {array} dto.TransferEventResponse
+// @Failure      404 {object} apperror.ErrorResponse
+// @Security     BearerAuth
+// @Router       /transfers/history [get]
+func (h *TransferHandler) History(c *fiber.Ctx) error {
+	id := c.Query("id")
+	if id == "" {
+		return apperror.ErrMissingField.WithMessage("id query parameter is required")
+	}
+
+	events, err := h.service.GetHistory(c.Context(), id)
+	if err != nil {
+		return err
+	}
+
+	var resp []dto.TransferEventResponse
+	for _, e := range events {
+		resp = append(resp, dto.TransferEventResponse{
+			ID:        e.ID,
+			Type:      string(e.Type),
+			Data:      e.Data,
+			Version:   e.Version,
+			OccuredAt: e.OccurredAt,
+		})
+	}
+
+	return c.JSON(resp)
+}
+
 func toTransferResponse(t *transfer.Transfer) dto.TransferResponse {
 	return dto.TransferResponse{
 		ID:            t.ID,

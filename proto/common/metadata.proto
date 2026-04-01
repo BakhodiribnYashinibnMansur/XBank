@@ -1,0 +1,17 @@
+syntax = "proto3";
+
+package xbank.common;
+
+option go_package = "github.com/BakhodiribnYashinibnMansur/XBank/proto/common";
+
+import "google/protobuf/timestamp.proto";
+
+// Metadata - common envelope for all domain events
+message Metadata {
+  string event_id       = 1;
+  string correlation_id = 2;
+  string user_id        = 3;
+  google.protobuf.Timestamp timestamp = 4;
+  int32  retry_count    = 5;
+  string source         = 6;
+}

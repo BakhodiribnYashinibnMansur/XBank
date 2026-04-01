@@ -1,7 +1,6 @@
 package shared
 
 import (
-	"context"
 	"fmt"
 
 	"github.com/BakhodiribnYashinibnMansur/XBank/pkg/apperror"
@@ -67,10 +66,4 @@ func (m Money) String() string {
 	major := m.Amount / 100
 	minor := m.Amount % 100
 	return fmt.Sprintf("%d.%02d %s", major, minor, m.Currency)
-}
-
-// TxManager manages database transactions.
-// The application layer uses this to wrap multiple repository calls in a single transaction.
-type TxManager interface {
-	WithTx(ctx context.Context, fn func(ctx context.Context) error) error
 }

@@ -8,23 +8,16 @@ type IssueCardRequest struct {
 }
 
 type ActivateCardRequest struct {
-	CardID string `json:"card_id"`
-	PIN    string `json:"pin"` // 4 digits
+	PIN string `json:"pin"` // 4 digits
 }
 
 type VerifyPINRequest struct {
-	CardID string `json:"card_id"`
-	PIN    string `json:"pin"`
+	PIN string `json:"pin"`
 }
 
 type ChangePINRequest struct {
-	CardID string `json:"card_id"`
 	OldPIN string `json:"old_pin"`
 	NewPIN string `json:"new_pin"`
-}
-
-type CardActionRequest struct {
-	CardID string `json:"card_id"`
 }
 
 type CardResponse struct {

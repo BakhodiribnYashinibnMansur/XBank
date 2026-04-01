@@ -19,14 +19,14 @@ func NewTransferRepository(pool *pgxpool.Pool) *TransferRepository {
 func (r *TransferRepository) Create(ctx context.Context, t *transfer.Transfer) error {
 	db := ExtractDBTX(ctx, r.pool)
 	query := `
-		INSERT INTO transfers (from_account_id, to_account_id, amount, currency, status, description, failure_reason, created_at)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
-		RETURNING id`
+		INSERT INTO transfers (id, from_account_id, to_account_id, amount, currency, status, description, failure_reason, created_at)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)`
 
-	return db.QueryRow(ctx, query,
-		t.FromAccountID, t.ToAccountID, t.Amount.Amount,
+	_, err := db.Exec(ctx, query,
+		t.ID, t.FromAccountID, t.ToAccountID, t.Amount.Amount,
 		t.Amount.Currency, t.Status, t.Description, t.FailureReason, t.CreatedAt,
-	).Scan(&t.ID)
+	)
+	return err
 }
 
 func (r *TransferRepository) GetByID(ctx context.Context, id string) (*transfer.Transfer, error) {
@@ -81,6 +81,15 @@ func (r *TransferRepository) ListByAccountID(ctx context.Context, accountID stri
 		transfers = append(transfers, t)
 	}
 	return transfers, nil
+}
+
+func (r *TransferRepository) Update(ctx context.Context, t *transfer.Transfer) error {
+	db := ExtractDBTX(ctx, r.pool)
+	_, err := db.Exec(ctx,
+		`UPDATE transfers SET status = $1, failure_reason = $2 WHERE id = $3`,
+		t.Status, t.FailureReason, t.ID,
+	)
+	return err
 }
 
 func (r *TransferRepository) CountByAccountID(ctx context.Context, accountID string) (int64, error) {

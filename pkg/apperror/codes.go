@@ -87,6 +87,11 @@ var (
 	ErrBeneficiaryExists   = Conflict(8002, "Beneficiary already exists")
 )
 
+// --- Application (85xx) ---
+var (
+	ErrConcurrencyConflict = Conflict(8501, "Resource was modified by another request, please retry")
+)
+
 // --- Infrastructure (9xxx) ---
 var (
 	ErrDatabase  = Internal(9001, "Database operation failed")

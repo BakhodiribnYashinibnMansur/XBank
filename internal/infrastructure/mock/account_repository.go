@@ -21,7 +21,9 @@ func (r *AccountRepository) Create(ctx context.Context, a *account.Account) erro
 	r.mu.Lock()
 	defer r.mu.Unlock()
 
-	a.ID = uuid.New().String()
+	if a.ID == "" {
+		a.ID = uuid.New().String()
+	}
 	r.accounts[a.ID] = a
 	return nil
 }

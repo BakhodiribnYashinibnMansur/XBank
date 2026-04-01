@@ -7,6 +7,7 @@ import (
 	"github.com/BakhodiribnYashinibnMansur/XBank/internal/domain/account"
 	"github.com/BakhodiribnYashinibnMansur/XBank/internal/domain/shared"
 	domainTransfer "github.com/BakhodiribnYashinibnMansur/XBank/internal/domain/transfer"
+	"github.com/BakhodiribnYashinibnMansur/XBank/internal/infrastructure/config"
 	"github.com/BakhodiribnYashinibnMansur/XBank/internal/infrastructure/mock"
 )
 
@@ -18,8 +19,10 @@ type testEnv struct {
 func setupTransferTest() *testEnv {
 	accountRepo := mock.NewAccountRepository()
 	transferRepo := mock.NewTransferRepository()
+	transferEventRepo := mock.NewTransferEventRepository()
+	publisher := mock.NewEventPublisher()
 	txMgr := mock.NewTxManager()
-	svc := NewService(transferRepo, accountRepo, txMgr)
+	svc := NewService(transferRepo, transferEventRepo, accountRepo, txMgr, publisher, config.KafkaTopicsConfig{})
 
 	// Create two test accounts with balance
 	acc1, _ := account.NewAccount("user-1", shared.UZS)

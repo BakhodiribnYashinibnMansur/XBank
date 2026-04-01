@@ -72,6 +72,13 @@ func (r *TransferRepository) CountByAccountID(ctx context.Context, accountID str
 	return count, nil
 }
 
+func (r *TransferRepository) Update(ctx context.Context, t *transfer.Transfer) error {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	r.transfers[t.ID] = t
+	return nil
+}
+
 // Seed - test uchun transfer qo'shish
 func (r *TransferRepository) Seed(t *transfer.Transfer) {
 	r.mu.Lock()
