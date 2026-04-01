@@ -21,6 +21,8 @@ import (
 	authApp "github.com/BakhodiribnYashinibnMansur/XBank/internal/application/auth"
 	benApp "github.com/BakhodiribnYashinibnMansur/XBank/internal/application/beneficiary"
 	exchApp "github.com/BakhodiribnYashinibnMansur/XBank/internal/application/exchange"
+	fraudApp "github.com/BakhodiribnYashinibnMansur/XBank/internal/application/fraud"
+	kycApp "github.com/BakhodiribnYashinibnMansur/XBank/internal/application/kyc"
 	cardApp "github.com/BakhodiribnYashinibnMansur/XBank/internal/application/card"
 	transferApp "github.com/BakhodiribnYashinibnMansur/XBank/internal/application/transfer"
 	userApp "github.com/BakhodiribnYashinibnMansur/XBank/internal/application/user"
@@ -148,13 +150,21 @@ func main() {
 	exchService := exchApp.NewService(exchRepo)
 	exchHandler := handler.NewExchangeHandler(exchService)
 
+	kycRepo := postgres.NewKYCRepository(pool)
+	kycService := kycApp.NewService(kycRepo)
+	kycHandler := handler.NewKYCHandler(kycService)
+
+	fraudRepo := postgres.NewFraudRepository(pool)
+	fraudService := fraudApp.NewService(fraudRepo)
+	fraudHandler := handler.NewFraudHandler(fraudService)
+
 	kafkaBroker := ""
 	if len(cfg.Kafka.Brokers) > 0 {
 		kafkaBroker = cfg.Kafka.Brokers[0]
 	}
 	healthHandler := handler.NewHealthHandler(pool, mongoClient, kafkaBroker)
 
-	app := router.NewRouter(userHandler, authHandler, accountHandler, transferHandler, cardHandler, benHandler, exchHandler, healthHandler, jwtService, redisClient, cfg)
+	app := router.NewRouter(userHandler, authHandler, accountHandler, transferHandler, cardHandler, benHandler, exchHandler, kycHandler, fraudHandler, healthHandler, jwtService, redisClient, cfg)
 
 	// Graceful shutdown: wait for termination signal (Ctrl+C or docker stop)
 	quit := make(chan os.Signal, 1)

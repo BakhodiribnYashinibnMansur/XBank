@@ -87,6 +87,13 @@ var (
 	ErrBeneficiaryExists   = Conflict(8002, "Beneficiary already exists")
 )
 
+// --- Contact (86xx) ---
+var (
+	ErrContactNotFound = NotFound(8601, "Contact not found")
+	ErrContactExists   = Conflict(8602, "Contact already exists")
+	ErrContactSelf     = BadRequest(8603, "Cannot add yourself as a contact")
+)
+
 // --- Application (85xx) ---
 var (
 	ErrConcurrencyConflict = Conflict(8501, "Resource was modified by another request, please retry")

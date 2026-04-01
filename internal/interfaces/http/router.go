@@ -24,6 +24,8 @@ func NewRouter(
 	cardHandler *handler.CardHandler,
 	beneficiaryHandler *handler.BeneficiaryHandler,
 	exchangeHandler *handler.ExchangeHandler,
+	kycHandler *handler.KYCHandler,
+	fraudHandler *handler.FraudHandler,
 	healthHandler *handler.HealthHandler,
 	jwtService *infraAuth.JWTService,
 	redisClient *goredis.Client,
@@ -121,6 +123,25 @@ func NewRouter(
 	bens.Post("/add", beneficiaryHandler.Add)
 	bens.Get("/list", beneficiaryHandler.List)
 	bens.Delete("/delete", beneficiaryHandler.Delete)
+
+	// KYC (customer)
+	kycRoutes := protected.Group("/kyc")
+	kycRoutes.Post("/submit", kycHandler.Submit)
+	kycRoutes.Get("/status", kycHandler.Status)
+
+	// Admin routes (ADMIN only)
+	admin := protected.Group("/admin", middleware.RequireRole("ADMIN"))
+
+	// KYC admin
+	adminKYC := admin.Group("/kyc")
+	adminKYC.Get("/pending", kycHandler.ListPending)
+	adminKYC.Post("/approve", kycHandler.Approve)
+	adminKYC.Post("/reject", kycHandler.Reject)
+
+	// Fraud admin
+	adminFraud := admin.Group("/fraud")
+	adminFraud.Get("/flagged", fraudHandler.ListFlagged)
+	adminFraud.Get("/check", fraudHandler.GetByTransfer)
 
 	return app
 }

@@ -30,6 +30,10 @@ func (s *Service) ShouldBlock(ctx context.Context, transferID, userID string, am
 	return check.Action == fraud.ActionBlock, check
 }
 
+func (s *Service) GetByTransferID(ctx context.Context, transferID string) (*fraud.Check, error) {
+	return s.repo.GetByTransferID(ctx, transferID)
+}
+
 func (s *Service) ListFlagged(ctx context.Context, limit, offset int) ([]*fraud.Check, int64, error) {
 	items, err := s.repo.ListFlagged(ctx, limit, offset)
 	if err != nil {
