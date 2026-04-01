@@ -25,6 +25,18 @@ definitions:
       timestamp:
         type: string
     type: object
+  dto.AccountEventResponse:
+    properties:
+      data: {}
+      id:
+        type: string
+      occurred_at:
+        type: string
+      type:
+        type: string
+      version:
+        type: integer
+    type: object
   dto.AccountResponse:
     properties:
       account_number:
@@ -42,10 +54,24 @@ definitions:
     type: object
   dto.ActivateCardRequest:
     properties:
-      card_id:
-        type: string
       pin:
         description: 4 digits
+        type: string
+    type: object
+  dto.AddBeneficiaryRequest:
+    properties:
+      account_number:
+        type: string
+      bank_code:
+        type: string
+      bank_name:
+        type: string
+      currency:
+        type: string
+      name:
+        type: string
+      type:
+        description: INTERNAL, EXTERNAL, INTERNATIONAL
         type: string
     type: object
   dto.AuthResponse:
@@ -57,10 +83,26 @@ definitions:
       user:
         $ref: '#/definitions/dto.UserResponse'
     type: object
-  dto.CardActionRequest:
+  dto.BeneficiaryResponse:
     properties:
-      card_id:
+      account_number:
         type: string
+      bank_code:
+        type: string
+      bank_name:
+        type: string
+      created_at:
+        type: string
+      currency:
+        type: string
+      id:
+        type: string
+      name:
+        type: string
+      type:
+        type: string
+      verified:
+        type: boolean
     type: object
   dto.CardResponse:
     properties:
@@ -84,16 +126,43 @@ definitions:
     type: object
   dto.ChangePINRequest:
     properties:
-      card_id:
-        type: string
       new_pin:
         type: string
       old_pin:
         type: string
     type: object
+  dto.ChangePasswordRequest:
+    properties:
+      new_password:
+        type: string
+      old_password:
+        type: string
+    type: object
   dto.CloseAccountRequest:
     properties:
       account_id:
+        type: string
+    type: object
+  dto.ConvertRequest:
+    properties:
+      amount:
+        type: integer
+      from:
+        type: string
+      to:
+        type: string
+    type: object
+  dto.ConvertResponse:
+    properties:
+      converted_amount:
+        type: integer
+      from:
+        type: string
+      original_amount:
+        type: integer
+      rate_used:
+        type: integer
+      to:
         type: string
     type: object
   dto.CreateAccountRequest:
@@ -108,12 +177,79 @@ definitions:
       amount:
         type: integer
     type: object
+  dto.FraudCheckResponse:
+    properties:
+      action:
+        type: string
+      created_at:
+        type: string
+      flags:
+        items:
+          type: string
+        type: array
+      id:
+        type: string
+      review_comment:
+        type: string
+      reviewed_by:
+        type: string
+      risk_level:
+        type: string
+      risk_score:
+        type: integer
+      transfer_id:
+        type: string
+      user_id:
+        type: string
+    type: object
   dto.IssueCardRequest:
     properties:
       account_id:
         type: string
       card_type:
         description: DEBIT, VIRTUAL
+        type: string
+    type: object
+  dto.KYCResponse:
+    properties:
+      created_at:
+        type: string
+      document_type:
+        type: string
+      first_name:
+        type: string
+      id:
+        type: string
+      last_name:
+        type: string
+      rejected_reason:
+        type: string
+      status:
+        type: string
+      user_id:
+        type: string
+    type: object
+  dto.KYCReviewRequest:
+    properties:
+      reason:
+        description: only for reject
+        type: string
+      verification_id:
+        type: string
+    type: object
+  dto.KYCSubmitRequest:
+    properties:
+      date_of_birth:
+        description: YYYY-MM-DD
+        type: string
+      document_number:
+        type: string
+      document_type:
+        description: PASSPORT, ID_CARD, DRIVER_LICENSE
+        type: string
+      first_name:
+        type: string
+      last_name:
         type: string
     type: object
   dto.LoginRequest:
@@ -142,6 +278,21 @@ definitions:
         type: integer
       total:
         type: integer
+    type: object
+  dto.RateResponse:
+    properties:
+      buy_rate:
+        type: integer
+      from_currency:
+        type: string
+      id:
+        type: string
+      sell_rate:
+        type: integer
+      to_currency:
+        type: string
+      updated_at:
+        type: string
     type: object
   dto.RefreshRequest:
     properties:
@@ -172,6 +323,18 @@ definitions:
       to_account_id:
         type: string
     type: object
+  dto.TransferEventResponse:
+    properties:
+      data: {}
+      id:
+        type: string
+      occurred_at:
+        type: string
+      type:
+        type: string
+      version:
+        type: integer
+    type: object
   dto.TransferResponse:
     properties:
       amount:
@@ -193,6 +356,17 @@ definitions:
       to_account_id:
         type: string
     type: object
+  dto.UpsertRateRequest:
+    properties:
+      buy_rate:
+        type: integer
+      from:
+        type: string
+      sell_rate:
+        type: integer
+      to:
+        type: string
+    type: object
   dto.UserResponse:
     properties:
       created_at:
@@ -208,8 +382,6 @@ definitions:
     type: object
   dto.VerifyPINRequest:
     properties:
-      card_id:
-        type: string
       pin:
         type: string
     type: object
@@ -338,6 +510,32 @@ paths:
       summary: Get account by ID
       tags:
       - Accounts
+  /accounts/history:
+    get:
+      parameters:
+      - description: Account ID
+        in: query
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            items:
+              $ref: '#/definitions/dto.AccountEventResponse'
+            type: array
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/apperror.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Get account event history
+      tags:
+      - Accounts
   /accounts/list:
     get:
       parameters:
@@ -394,6 +592,126 @@ paths:
       summary: Withdraw funds
       tags:
       - Accounts
+  /admin/fraud/check:
+    get:
+      parameters:
+      - description: Transfer ID
+        in: query
+        name: transfer_id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/dto.FraudCheckResponse'
+      security:
+      - BearerAuth: []
+      summary: Get fraud check for a transfer
+      tags:
+      - Fraud
+  /admin/fraud/flagged:
+    get:
+      parameters:
+      - default: 1
+        description: Page
+        in: query
+        name: page
+        type: integer
+      - default: 20
+        description: Limit
+        in: query
+        name: limit
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/dto.PaginatedResponse'
+      security:
+      - BearerAuth: []
+      summary: List flagged/blocked transactions (admin)
+      tags:
+      - Fraud
+  /admin/kyc/approve:
+    post:
+      consumes:
+      - application/json
+      parameters:
+      - description: Verification ID
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/dto.KYCReviewRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Approve KYC (admin)
+      tags:
+      - KYC
+  /admin/kyc/pending:
+    get:
+      parameters:
+      - default: 1
+        description: Page
+        in: query
+        name: page
+        type: integer
+      - default: 20
+        description: Limit
+        in: query
+        name: limit
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/dto.PaginatedResponse'
+      security:
+      - BearerAuth: []
+      summary: List pending KYC verifications (admin)
+      tags:
+      - KYC
+  /admin/kyc/reject:
+    post:
+      consumes:
+      - application/json
+      parameters:
+      - description: Verification ID + reason
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/dto.KYCReviewRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Reject KYC (admin)
+      tags:
+      - KYC
   /auth/login:
     post:
       consumes:
@@ -512,91 +830,33 @@ paths:
       summary: Register a new user
       tags:
       - Auth
-  /cards/activate:
+  /beneficiaries/add:
     post:
       consumes:
       - application/json
       parameters:
-      - description: Card ID and 4-digit PIN
+      - description: Beneficiary details
         in: body
         name: body
         required: true
         schema:
-          $ref: '#/definitions/dto.ActivateCardRequest'
+          $ref: '#/definitions/dto.AddBeneficiaryRequest'
       produces:
       - application/json
       responses:
-        "200":
-          description: OK
+        "201":
+          description: Created
           schema:
-            $ref: '#/definitions/dto.CardResponse'
-        "400":
-          description: Bad Request
-          schema:
-            $ref: '#/definitions/apperror.ErrorResponse'
+            $ref: '#/definitions/dto.BeneficiaryResponse'
       security:
       - BearerAuth: []
-      summary: Activate a card by setting PIN
+      summary: Add a beneficiary
       tags:
-      - Cards
-  /cards/block:
-    post:
-      consumes:
-      - application/json
+      - Beneficiaries
+  /beneficiaries/delete:
+    delete:
       parameters:
-      - description: Card ID
-        in: body
-        name: body
-        required: true
-        schema:
-          $ref: '#/definitions/dto.CardActionRequest'
-      produces:
-      - application/json
-      responses:
-        "200":
-          description: OK
-          schema:
-            additionalProperties:
-              type: string
-            type: object
-      security:
-      - BearerAuth: []
-      summary: Block a card
-      tags:
-      - Cards
-  /cards/change-pin:
-    post:
-      consumes:
-      - application/json
-      parameters:
-      - description: Card ID, old PIN, new PIN
-        in: body
-        name: body
-        required: true
-        schema:
-          $ref: '#/definitions/dto.ChangePINRequest'
-      produces:
-      - application/json
-      responses:
-        "200":
-          description: OK
-          schema:
-            additionalProperties:
-              type: string
-            type: object
-        "400":
-          description: Bad Request
-          schema:
-            $ref: '#/definitions/apperror.ErrorResponse'
-      security:
-      - BearerAuth: []
-      summary: Change card PIN
-      tags:
-      - Cards
-  /cards/get:
-    get:
-      parameters:
-      - description: Card ID
+      - description: Beneficiary ID
         in: query
         name: id
         required: true
@@ -607,44 +867,40 @@ paths:
         "200":
           description: OK
           schema:
-            $ref: '#/definitions/dto.CardResponse'
-        "404":
-          description: Not Found
-          schema:
-            $ref: '#/definitions/apperror.ErrorResponse'
+            additionalProperties:
+              type: string
+            type: object
       security:
       - BearerAuth: []
-      summary: Get card by ID
+      summary: Delete a beneficiary
       tags:
-      - Cards
-  /cards/issue:
-    post:
-      consumes:
-      - application/json
+      - Beneficiaries
+  /beneficiaries/list:
+    get:
       parameters:
-      - description: Account ID and card type
-        in: body
-        name: body
-        required: true
-        schema:
-          $ref: '#/definitions/dto.IssueCardRequest'
+      - default: 1
+        description: Page
+        in: query
+        name: page
+        type: integer
+      - default: 20
+        description: Limit
+        in: query
+        name: limit
+        type: integer
       produces:
       - application/json
       responses:
-        "201":
-          description: Created
+        "200":
+          description: OK
           schema:
-            $ref: '#/definitions/dto.CardResponse'
-        "400":
-          description: Bad Request
-          schema:
-            $ref: '#/definitions/apperror.ErrorResponse'
+            $ref: '#/definitions/dto.PaginatedResponse'
       security:
       - BearerAuth: []
-      summary: Issue a new card
+      summary: List beneficiaries (paginated)
       tags:
-      - Cards
-  /cards/list:
+      - Beneficiaries
+  /cards:
     get:
       parameters:
       - description: Account ID
@@ -671,20 +927,155 @@ paths:
             $ref: '#/definitions/dto.PaginatedResponse'
       security:
       - BearerAuth: []
-      summary: List cards for an account (paginated)
+      summary: Cards for an account (paginated)
       tags:
       - Cards
-  /cards/unblock:
+    post:
+      consumes:
+      - application/json
+      parameters:
+      - description: Account ID and card type
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/dto.IssueCardRequest'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            $ref: '#/definitions/dto.CardResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/apperror.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Issue a new card
+      tags:
+      - Cards
+  /cards/{id}:
+    get:
+      parameters:
+      - description: Card ID
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/dto.CardResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/apperror.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Card details by ID
+      tags:
+      - Cards
+  /cards/{id}/activate:
     post:
       consumes:
       - application/json
       parameters:
       - description: Card ID
+        in: path
+        name: id
+        required: true
+        type: string
+      - description: 4-digit PIN
         in: body
         name: body
         required: true
         schema:
-          $ref: '#/definitions/dto.CardActionRequest'
+          $ref: '#/definitions/dto.ActivateCardRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/dto.CardResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/apperror.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Activate a card by setting PIN
+      tags:
+      - Cards
+  /cards/{id}/block:
+    post:
+      parameters:
+      - description: Card ID
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Block a card
+      tags:
+      - Cards
+  /cards/{id}/pin:
+    put:
+      consumes:
+      - application/json
+      parameters:
+      - description: Card ID
+        in: path
+        name: id
+        required: true
+        type: string
+      - description: Old PIN and new PIN
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/dto.ChangePINRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/apperror.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Change card PIN
+      tags:
+      - Cards
+  /cards/{id}/unblock:
+    post:
+      parameters:
+      - description: Card ID
+        in: path
+        name: id
+        required: true
+        type: string
       produces:
       - application/json
       responses:
@@ -699,12 +1090,17 @@ paths:
       summary: Unblock a card
       tags:
       - Cards
-  /cards/verify-pin:
+  /cards/{id}/verify-pin:
     post:
       consumes:
       - application/json
       parameters:
-      - description: Card ID and PIN
+      - description: Card ID
+        in: path
+        name: id
+        required: true
+        type: string
+      - description: PIN
         in: body
         name: body
         required: true
@@ -732,6 +1128,170 @@ paths:
       summary: Verify card PIN
       tags:
       - Cards
+  /currencies/convert:
+    post:
+      consumes:
+      - application/json
+      parameters:
+      - description: Conversion details
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/dto.ConvertRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/dto.ConvertResponse'
+      security:
+      - BearerAuth: []
+      summary: Convert currency
+      tags:
+      - Exchange
+  /currencies/rate:
+    get:
+      parameters:
+      - description: From currency (e.g. USD)
+        in: query
+        name: from
+        required: true
+        type: string
+      - description: To currency (e.g. UZS)
+        in: query
+        name: to
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/dto.RateResponse'
+      summary: Get exchange rate
+      tags:
+      - Exchange
+    post:
+      consumes:
+      - application/json
+      parameters:
+      - description: Rate details
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/dto.UpsertRateRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/dto.RateResponse'
+      security:
+      - BearerAuth: []
+      summary: Set/update exchange rate (admin only)
+      tags:
+      - Exchange
+  /currencies/rates:
+    get:
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            items:
+              $ref: '#/definitions/dto.RateResponse'
+            type: array
+      summary: List all exchange rates
+      tags:
+      - Exchange
+  /health:
+    get:
+      description: Returns 200 if the process is alive
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      summary: Liveness probe
+      tags:
+      - Health
+  /health/ready:
+    get:
+      description: Checks all dependencies (PostgreSQL, MongoDB, Kafka)
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+        "503":
+          description: Service Unavailable
+          schema:
+            additionalProperties: true
+            type: object
+      summary: Readiness probe
+      tags:
+      - Health
+  /kyc/status:
+    get:
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/dto.KYCResponse'
+      security:
+      - BearerAuth: []
+      summary: Get KYC status
+      tags:
+      - KYC
+  /kyc/submit:
+    post:
+      consumes:
+      - application/json
+      parameters:
+      - description: Document details
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/dto.KYCSubmitRequest'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            $ref: '#/definitions/dto.KYCResponse'
+      security:
+      - BearerAuth: []
+      summary: Submit KYC verification
+      tags:
+      - KYC
+  /notifications/stream:
+    get:
+      description: Server-Sent Events stream for real-time notifications
+      produces:
+      - text/event-stream
+      responses: {}
+      security:
+      - BearerAuth: []
+      summary: SSE notification stream
+      tags:
+      - Notifications
   /transfers/get:
     get:
       parameters:
@@ -754,6 +1314,32 @@ paths:
       security:
       - BearerAuth: []
       summary: Get transfer by ID
+      tags:
+      - Transfers
+  /transfers/history:
+    get:
+      parameters:
+      - description: Transfer ID
+        in: query
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            items:
+              $ref: '#/definitions/dto.TransferEventResponse'
+            type: array
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/apperror.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Get transfer event history
       tags:
       - Transfers
   /transfers/list:
@@ -817,6 +1403,31 @@ paths:
       summary: Transfer funds between accounts
       tags:
       - Transfers
+  /users/change-password:
+    post:
+      consumes:
+      - application/json
+      parameters:
+      - description: Old and new password
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/dto.ChangePasswordRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Change password
+      tags:
+      - Users
   /users/get:
     get:
       parameters:
@@ -839,6 +1450,36 @@ paths:
       security:
       - BearerAuth: []
       summary: Get user by ID
+      tags:
+      - Users
+  /users/me/data-export:
+    get:
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/dto.UserResponse'
+      security:
+      - BearerAuth: []
+      summary: Export user data (GDPR)
+      tags:
+      - Users
+  /users/me/delete:
+    delete:
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Delete account / anonymize data (GDPR)
       tags:
       - Users
 securityDefinitions:

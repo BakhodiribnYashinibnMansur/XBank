@@ -29,14 +29,25 @@ func NewHealthHandler(dbPool *pgxpool.Pool, mongoClient *mongo.Client, kafkaBrok
 	}
 }
 
-// Live — liveness probe. Returns 200 if the process is alive.
-// Kubernetes uses this to decide whether to restart the container.
+// Live godoc
+// @Summary      Liveness probe
+// @Description  Returns 200 if the process is alive
+// @Tags         Health
+// @Produce      json
+// @Success      200 {object} map[string]string
+// @Router       /health [get]
 func (h *HealthHandler) Live(c *fiber.Ctx) error {
 	return c.JSON(fiber.Map{"status": "ok"})
 }
 
-// Ready — readiness probe. Checks all dependencies (PG, MongoDB, Kafka).
-// Kubernetes uses this to decide whether to route traffic to this pod.
+// Ready godoc
+// @Summary      Readiness probe
+// @Description  Checks all dependencies (PostgreSQL, MongoDB, Kafka)
+// @Tags         Health
+// @Produce      json
+// @Success      200 {object} map[string]interface{}
+// @Failure      503 {object} map[string]interface{}
+// @Router       /health/ready [get]
 func (h *HealthHandler) Ready(c *fiber.Ctx) error {
 	ctx, cancel := context.WithTimeout(c.Context(), 3*time.Second)
 	defer cancel()
