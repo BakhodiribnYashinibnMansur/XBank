@@ -7,6 +7,7 @@ import (
 
 	"github.com/gofiber/fiber/v2"
 	"github.com/jackc/pgx/v5/pgxpool"
+	goredis "github.com/redis/go-redis/v9"
 	"github.com/segmentio/kafka-go"
 	"go.mongodb.org/mongo-driver/mongo"
 	"go.mongodb.org/mongo-driver/mongo/readpref"
@@ -17,15 +18,22 @@ type HealthHandler struct {
 	dbPool      *pgxpool.Pool
 	mongoClient *mongo.Client
 	kafkaBroker string
+	redisClient RedisClient
+}
+
+// RedisClient is the subset of redis.Client used for health checks.
+type RedisClient interface {
+	Ping(ctx context.Context) *goredis.StatusCmd
 }
 
 // NewHealthHandler creates a new HealthHandler.
-// mongoClient and kafkaBroker may be nil/empty if not configured.
-func NewHealthHandler(dbPool *pgxpool.Pool, mongoClient *mongo.Client, kafkaBroker string) *HealthHandler {
+// mongoClient, redisClient and kafkaBroker may be nil/empty if not configured.
+func NewHealthHandler(dbPool *pgxpool.Pool, mongoClient *mongo.Client, kafkaBroker string, redisClient RedisClient) *HealthHandler {
 	return &HealthHandler{
 		dbPool:      dbPool,
 		mongoClient: mongoClient,
 		kafkaBroker: kafkaBroker,
+		redisClient: redisClient,
 	}
 }
 
@@ -70,6 +78,16 @@ func (h *HealthHandler) Ready(c *fiber.Ctx) error {
 			allOk = false
 		} else {
 			checks["mongodb"] = "up"
+		}
+	}
+
+	// Redis
+	if h.redisClient != nil {
+		if err := h.redisClient.Ping(ctx).Err(); err != nil {
+			checks["redis"] = "down"
+			allOk = false
+		} else {
+			checks["redis"] = "up"
 		}
 	}
 

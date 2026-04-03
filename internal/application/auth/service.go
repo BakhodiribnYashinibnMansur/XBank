@@ -23,6 +23,7 @@ type Service struct {
 	userRepo     user.Repository
 	sessionRepo  session.Repository    // DB (audit)
 	jwtService   *infraAuth.JWTService
+	totpService  *infraAuth.TOTPService   // nil = TOTP disabled globally
 	sessionCache *infraRedis.SessionCache  // Redis (active check) — nil = use DB only
 	loginLimiter *infraRedis.LoginLimiter  // brute-force — nil = disabled
 }
@@ -31,6 +32,7 @@ func NewService(
 	userRepo user.Repository,
 	sessionRepo session.Repository,
 	jwtService *infraAuth.JWTService,
+	totpService *infraAuth.TOTPService,
 	sessionCache *infraRedis.SessionCache,
 	loginLimiter *infraRedis.LoginLimiter,
 ) *Service {
@@ -38,6 +40,7 @@ func NewService(
 		userRepo:     userRepo,
 		sessionRepo:  sessionRepo,
 		jwtService:   jwtService,
+		totpService:  totpService,
 		sessionCache: sessionCache,
 		loginLimiter: loginLimiter,
 	}
@@ -47,6 +50,7 @@ type LoginResult struct {
 	AccessToken  string
 	RefreshToken string
 	User         *user.User
+	TOTPRequired bool   // true = client must call /auth/totp/verify
 }
 
 // Login - user sign-in
@@ -73,6 +77,18 @@ func (s *Service) Login(ctx context.Context, email, password, userAgent, ipAddre
 	if err := bcrypt.CompareHashAndPassword([]byte(u.Password), []byte(password)); err != nil {
 		s.recordLoginFailure(ctx, email)
 		return nil, ErrInvalidCredentials
+	}
+
+	// 2.5. If TOTP is enabled, don't issue tokens yet — require TOTP verification
+	if u.TOTPEnabled {
+		if s.loginLimiter != nil {
+			s.loginLimiter.ResetAttempts(ctx, email)
+		}
+		metrics.LoginsTotal.WithLabelValues("totp_pending").Inc()
+		return &LoginResult{
+			User:         u,
+			TOTPRequired: true,
+		}, nil
 	}
 
 	// 3. Generate tokens
@@ -107,6 +123,120 @@ func (s *Service) Login(ctx context.Context, email, password, userAgent, ipAddre
 		RefreshToken: tokenPair.RefreshToken,
 		User:         u,
 	}, nil
+}
+
+// LoginWithTOTP - complete login after TOTP verification.
+// Called when Login returns TOTPRequired=true.
+func (s *Service) LoginWithTOTP(ctx context.Context, email, code, userAgent, ipAddress string) (_ *LoginResult, err error) {
+	defer metrics.ObserveService("AuthService", "LoginWithTOTP", time.Now(), &err)
+
+	u, err := s.userRepo.GetByEmail(ctx, email)
+	if err != nil {
+		return nil, ErrInvalidCredentials
+	}
+
+	if !u.TOTPEnabled || u.TOTPSecret == "" {
+		return nil, apperror.ErrTOTPNotEnabled
+	}
+
+	// Validate TOTP code
+	if s.totpService == nil || !s.totpService.Validate(code, u.TOTPSecret) {
+		metrics.LoginsTotal.WithLabelValues("totp_failed").Inc()
+		return nil, apperror.ErrTOTPInvalidCode
+	}
+
+	// TOTP valid — issue tokens
+	tokenPair, err := s.jwtService.GenerateTokenPair(u.ID, u.Email, string(u.Role), ipAddress)
+	if err != nil {
+		return nil, err
+	}
+
+	refreshTokenHash := infraAuth.HashToken(tokenPair.RefreshToken)
+	expiresAt := time.Now().Add(s.jwtService.RefreshTokenTTL())
+
+	sess, err := session.NewSession(u.ID, refreshTokenHash, userAgent, ipAddress, expiresAt)
+	if err != nil {
+		return nil, err
+	}
+	if err := s.sessionRepo.Create(ctx, sess); err != nil {
+		return nil, err
+	}
+	s.cacheSession(ctx, refreshTokenHash, sess, s.jwtService.RefreshTokenTTL())
+
+	metrics.LoginsTotal.WithLabelValues("totp_success").Inc()
+	return &LoginResult{
+		AccessToken:  tokenPair.AccessToken,
+		RefreshToken: tokenPair.RefreshToken,
+		User:         u,
+	}, nil
+}
+
+// SetupTOTP - generate a TOTP secret for a user (before enabling)
+func (s *Service) SetupTOTP(ctx context.Context, userID string) (secret, url string, err error) {
+	defer metrics.ObserveService("AuthService", "SetupTOTP", time.Now(), &err)
+
+	if s.totpService == nil {
+		return "", "", apperror.ErrInternal.WithMessage("TOTP not configured")
+	}
+
+	u, err := s.userRepo.GetByID(ctx, userID)
+	if err != nil {
+		return "", "", err
+	}
+	if u.TOTPEnabled {
+		return "", "", apperror.ErrTOTPAlreadyEnabled
+	}
+
+	secret, url, err = s.totpService.GenerateSecret(u.Email)
+	if err != nil {
+		return "", "", apperror.ErrInternal.Wrap(err)
+	}
+
+	// Save secret but don't enable yet — user must verify first
+	if err := s.userRepo.UpdateTOTP(ctx, userID, secret, false, nil); err != nil {
+		return "", "", apperror.ErrInternal.Wrap(err)
+	}
+
+	return secret, url, nil
+}
+
+// VerifyAndEnableTOTP - verify a TOTP code and enable 2FA
+func (s *Service) VerifyAndEnableTOTP(ctx context.Context, userID, code string) (err error) {
+	defer metrics.ObserveService("AuthService", "VerifyAndEnableTOTP", time.Now(), &err)
+
+	u, err := s.userRepo.GetByID(ctx, userID)
+	if err != nil {
+		return err
+	}
+	if u.TOTPEnabled {
+		return apperror.ErrTOTPAlreadyEnabled
+	}
+	if u.TOTPSecret == "" {
+		return apperror.ErrBadRequest.WithMessage("Call /auth/totp/setup first")
+	}
+
+	if s.totpService == nil || !s.totpService.Validate(code, u.TOTPSecret) {
+		return apperror.ErrTOTPInvalidCode
+	}
+
+	now := time.Now()
+	return s.userRepo.UpdateTOTP(ctx, userID, u.TOTPSecret, true, &now)
+}
+
+// DisableTOTP - turn off 2FA (requires password confirmation)
+func (s *Service) DisableTOTP(ctx context.Context, userID, password string) (err error) {
+	defer metrics.ObserveService("AuthService", "DisableTOTP", time.Now(), &err)
+
+	u, err := s.userRepo.GetByID(ctx, userID)
+	if err != nil {
+		return err
+	}
+
+	if err := bcrypt.CompareHashAndPassword([]byte(u.Password), []byte(password)); err != nil {
+		return ErrInvalidCredentials
+	}
+
+	return s.userRepo.UpdateTOTP(ctx, userID, "", false, nil)
 }
 
 // Refresh - obtain new token pair

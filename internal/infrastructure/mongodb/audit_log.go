@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"github.com/BakhodiribnYashinibnMansur/XBank/internal/domain/shared"
+	"github.com/BakhodiribnYashinibnMansur/XBank/internal/infrastructure/circuitbreaker"
 	"github.com/BakhodiribnYashinibnMansur/XBank/pkg/logger"
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/mongo"
@@ -13,14 +14,17 @@ import (
 
 // AuditLog - MongoDB implementation of shared.AuditLog
 // Writes audit entries async (non-blocking goroutine)
+// Protected by circuit breaker to prevent cascading failures when MongoDB is down.
 type AuditLog struct {
 	collection *mongo.Collection
+	breaker    *circuitbreaker.Breaker
 }
 
 // NewAuditLog - create audit log writer
 func NewAuditLog(db *mongo.Database) *AuditLog {
 	return &AuditLog{
 		collection: db.Collection("audit_log"),
+		breaker:    circuitbreaker.New("mongodb-audit", 5, 30*time.Second),
 	}
 }
 
@@ -40,7 +44,10 @@ func (a *AuditLog) Log(ctx context.Context, entry shared.AuditEntry) error {
 			"created_at":     time.Now(),
 		}
 
-		_, err := a.collection.InsertOne(context.Background(), doc)
+		err := a.breaker.Execute(func() error {
+			_, insertErr := a.collection.InsertOne(context.Background(), doc)
+			return insertErr
+		})
 		if err != nil {
 			logger.Log.Error("audit log write failed",
 				zap.String("aggregate_type", entry.AggregateType),

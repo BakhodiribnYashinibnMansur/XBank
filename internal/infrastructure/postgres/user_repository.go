@@ -41,9 +41,9 @@ func (r *UserRepository) GetByID(ctx context.Context, id string) (*user.User, er
 	db := ExtractDBTX(ctx, r.pool)
 	u := &user.User{}
 	err := db.QueryRow(ctx,
-		`SELECT id, email, password, first_name, last_name, role, created_at, updated_at
+		`SELECT id, email, password, first_name, last_name, role, totp_secret, totp_enabled, totp_verified_at, created_at, updated_at
 		 FROM users WHERE id = $1`, id,
-	).Scan(&u.ID, &u.Email, &u.Password, &u.FirstName, &u.LastName, &u.Role, &u.CreatedAt, &u.UpdatedAt)
+	).Scan(&u.ID, &u.Email, &u.Password, &u.FirstName, &u.LastName, &u.Role, &u.TOTPSecret, &u.TOTPEnabled, &u.TOTPVerifiedAt, &u.CreatedAt, &u.UpdatedAt)
 	metrics.ObserveQuery("UserRepo.GetByID", start, err)
 	if err != nil {
 		return nil, user.ErrUserNotFound
@@ -56,9 +56,9 @@ func (r *UserRepository) GetByEmail(ctx context.Context, email string) (*user.Us
 	db := ExtractDBTX(ctx, r.pool)
 	u := &user.User{}
 	err := db.QueryRow(ctx,
-		`SELECT id, email, password, first_name, last_name, role, created_at, updated_at
+		`SELECT id, email, password, first_name, last_name, role, totp_secret, totp_enabled, totp_verified_at, created_at, updated_at
 		 FROM users WHERE email = $1`, email,
-	).Scan(&u.ID, &u.Email, &u.Password, &u.FirstName, &u.LastName, &u.Role, &u.CreatedAt, &u.UpdatedAt)
+	).Scan(&u.ID, &u.Email, &u.Password, &u.FirstName, &u.LastName, &u.Role, &u.TOTPSecret, &u.TOTPEnabled, &u.TOTPVerifiedAt, &u.CreatedAt, &u.UpdatedAt)
 	metrics.ObserveQuery("UserRepo.GetByEmail", start, err)
 	if err != nil {
 		return nil, user.ErrUserNotFound
@@ -80,6 +80,17 @@ func (r *UserRepository) UpdatePassword(ctx context.Context, userID, hashedPassw
 	db := ExtractDBTX(ctx, r.pool)
 	_, err := db.Exec(ctx, `UPDATE users SET password = $1, updated_at = NOW() WHERE id = $2`, hashedPassword, userID)
 	metrics.ObserveQuery("UserRepo.UpdatePassword", start, err)
+	return err
+}
+
+func (r *UserRepository) UpdateTOTP(ctx context.Context, userID, totpSecret string, enabled bool, verifiedAt *time.Time) error {
+	start := time.Now()
+	db := ExtractDBTX(ctx, r.pool)
+	_, err := db.Exec(ctx,
+		`UPDATE users SET totp_secret = $1, totp_enabled = $2, totp_verified_at = $3, updated_at = NOW() WHERE id = $4`,
+		totpSecret, enabled, verifiedAt, userID,
+	)
+	metrics.ObserveQuery("UserRepo.UpdateTOTP", start, err)
 	return err
 }
 

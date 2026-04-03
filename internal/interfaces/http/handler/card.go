@@ -47,7 +47,7 @@ func (h *CardHandler) Issue(c *fiber.Ctx) error {
 		return err
 	}
 
-	return c.Status(http.StatusCreated).JSON(toCardResponse(card))
+	return apperror.Success(c, http.StatusCreated, toCardResponse(card))
 }
 
 // Activate godoc
@@ -77,7 +77,7 @@ func (h *CardHandler) Activate(c *fiber.Ctx) error {
 		return err
 	}
 
-	return c.JSON(toCardResponse(card))
+	return apperror.Success(c, http.StatusOK, toCardResponse(card))
 }
 
 // VerifyPIN godoc
@@ -107,7 +107,7 @@ func (h *CardHandler) VerifyPIN(c *fiber.Ctx) error {
 		return err
 	}
 
-	return c.JSON(fiber.Map{"message": "PIN verified"})
+	return apperror.Success(c, http.StatusOK, fiber.Map{"message": "PIN verified"})
 }
 
 // ChangePIN godoc
@@ -136,7 +136,7 @@ func (h *CardHandler) ChangePIN(c *fiber.Ctx) error {
 		return err
 	}
 
-	return c.JSON(fiber.Map{"message": "PIN changed"})
+	return apperror.Success(c, http.StatusOK, fiber.Map{"message": "PIN changed"})
 }
 
 // Block godoc
@@ -153,7 +153,7 @@ func (h *CardHandler) Block(c *fiber.Ctx) error {
 	if err := h.service.Block(c.Context(), cardID); err != nil {
 		return err
 	}
-	return c.JSON(fiber.Map{"message": "Card blocked"})
+	return apperror.Success(c, http.StatusOK, fiber.Map{"message": "Card blocked"})
 }
 
 // Unblock godoc
@@ -170,7 +170,7 @@ func (h *CardHandler) Unblock(c *fiber.Ctx) error {
 	if err := h.service.Unblock(c.Context(), cardID); err != nil {
 		return err
 	}
-	return c.JSON(fiber.Map{"message": "Card unblocked"})
+	return apperror.Success(c, http.StatusOK, fiber.Map{"message": "Card unblocked"})
 }
 
 // ByID godoc
@@ -189,7 +189,7 @@ func (h *CardHandler) ByID(c *fiber.Ctx) error {
 	if err != nil {
 		return err
 	}
-	return c.JSON(toCardResponse(card))
+	return apperror.Success(c, http.StatusOK, toCardResponse(card))
 }
 
 // ByAccount godoc
@@ -222,7 +222,7 @@ func (h *CardHandler) ByAccount(c *fiber.Ctx) error {
 		data = []dto.CardResponse{}
 	}
 
-	return c.JSON(dto.PaginatedResponse{
+	return apperror.Success(c, http.StatusOK, dto.PaginatedResponse{
 		Data:       data,
 		Pagination: dto.PaginationResponse{Page: pg.Page, Limit: pg.Limit, Total: total},
 	})

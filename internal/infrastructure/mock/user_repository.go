@@ -3,6 +3,7 @@ package mock
 import (
 	"context"
 	"sync"
+	"time"
 
 	"github.com/BakhodiribnYashinibnMansur/XBank/internal/domain/user"
 	"github.com/google/uuid"
@@ -67,6 +68,17 @@ func (r *UserRepository) UpdatePassword(ctx context.Context, userID, hashedPassw
 	defer r.mu.Unlock()
 	if u, ok := r.users[userID]; ok {
 		u.Password = hashedPassword
+	}
+	return nil
+}
+
+func (r *UserRepository) UpdateTOTP(ctx context.Context, userID, totpSecret string, enabled bool, verifiedAt *time.Time) error {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	if u, ok := r.users[userID]; ok {
+		u.TOTPSecret = totpSecret
+		u.TOTPEnabled = enabled
+		u.TOTPVerifiedAt = verifiedAt
 	}
 	return nil
 }

@@ -48,11 +48,22 @@ func NewTxManager(pool *pgxpool.Pool) *TxManager {
 	return &TxManager{pool: pool}
 }
 
-// WithTx executes fn within a database transaction.
-// If fn returns nil, the transaction is committed.
-// If fn returns an error (or panics), the transaction is rolled back.
+// WithTx executes fn within a database transaction (READ COMMITTED).
 func (m *TxManager) WithTx(ctx context.Context, fn func(ctx context.Context) error) error {
-	tx, err := m.pool.Begin(ctx)
+	return m.withTxOptions(ctx, pgx.TxOptions{}, fn)
+}
+
+// WithSerializableTx executes fn within a SERIALIZABLE transaction.
+// Prevents phantom reads — required for financial operations (transfers, holds).
+// On serialization failure (40001), the caller should retry.
+func (m *TxManager) WithSerializableTx(ctx context.Context, fn func(ctx context.Context) error) error {
+	return m.withTxOptions(ctx, pgx.TxOptions{
+		IsoLevel: pgx.Serializable,
+	}, fn)
+}
+
+func (m *TxManager) withTxOptions(ctx context.Context, opts pgx.TxOptions, fn func(ctx context.Context) error) error {
+	tx, err := m.pool.BeginTx(ctx, opts)
 	if err != nil {
 		return fmt.Errorf("begin tx: %w", err)
 	}

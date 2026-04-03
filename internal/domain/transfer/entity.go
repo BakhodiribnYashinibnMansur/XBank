@@ -7,14 +7,13 @@ import (
 	"time"
 
 	"github.com/BakhodiribnYashinibnMansur/XBank/internal/domain/shared"
-	"github.com/BakhodiribnYashinibnMansur/XBank/pkg/apperror"
 )
 
 var (
-	ErrTransferNotFound = apperror.ErrTransferNotFound
-	ErrSameAccount      = apperror.ErrSameAccount
-	ErrInvalidAmount    = apperror.ErrInvalidAmount
-	ErrTransferFailed   = apperror.ErrTransferFailed
+	ErrTransferNotFound = shared.NewDomainError("TRANSFER_NOT_FOUND", "transfer not found")
+	ErrSameAccount      = shared.NewDomainError("SAME_ACCOUNT", "cannot transfer to the same account")
+	ErrInvalidAmount    = shared.NewDomainError("INVALID_AMOUNT", "amount must be greater than zero")
+	ErrTransferFailed   = shared.NewDomainError("TRANSFER_FAILED", "transfer processing failed")
 )
 
 type Status string

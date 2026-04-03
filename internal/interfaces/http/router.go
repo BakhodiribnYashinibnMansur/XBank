@@ -1,6 +1,7 @@
 package http
 
 import (
+	"context"
 	"time"
 
 	_ "github.com/BakhodiribnYashinibnMansur/XBank/docs/swagger"
@@ -17,21 +18,34 @@ import (
 	"github.com/valyala/fasthttp/fasthttpadaptor"
 )
 
+// challengeValidator - interface to avoid circular import with challenge service
+type challengeValidator interface {
+	ValidateToken(ctx context.Context, token, userID string) error
+}
+
 func NewRouter(
 	userHandler *handler.UserHandler,
 	authHandler *handler.AuthHandler,
 	accountHandler *handler.AccountHandler,
 	transferHandler *handler.TransferHandler,
 	cardHandler *handler.CardHandler,
+	cardExtHandler *handler.CardExtendedHandler,
 	beneficiaryHandler *handler.BeneficiaryHandler,
 	exchangeHandler *handler.ExchangeHandler,
 	kycHandler *handler.KYCHandler,
 	fraudHandler *handler.FraudHandler,
 	notificationHandler *handler.NotificationHandler,
+	contactHandler *handler.ContactHandler,
 	healthHandler *handler.HealthHandler,
+	auditHandler *handler.AuditHandler,
+	reconHandler *handler.ReconciliationHandler,
+	challengeHandler *handler.ChallengeHandler,
+	totpHandler *handler.TOTPHandler,
+	scheduledHandler *handler.ScheduledTransferHandler,
 	jwtService *infraAuth.JWTService,
 	adminWhitelist *middleware.DynamicIPWhitelist,
 	hmacSigner *infraCrypto.HMACSigner,
+	challengeService challengeValidator,
 	redisClient *goredis.Client,
 	cfg *config.Config,
 ) *fiber.App {
@@ -76,9 +90,27 @@ func NewRouter(
 	auth.Post("/refresh", authHandler.Refresh)
 	auth.Post("/logout", authHandler.Logout)
 
+	// TOTP (public — called before JWT is issued)
+	if totpHandler != nil {
+		auth.Post("/totp/verify", totpHandler.VerifyLogin) // complete login with TOTP code
+	}
+
 	// Protected
 	protected := v1.Group("", middleware.AuthMiddleware(jwtService), middleware.RLSMiddleware())
 	protected.Post("/auth/logout-all", authHandler.LogoutAll)
+
+	// TOTP management (protected — requires JWT)
+	if totpHandler != nil {
+		protected.Post("/auth/totp/setup", totpHandler.Setup)
+		protected.Post("/auth/totp/confirm", totpHandler.ConfirmSetup)
+		protected.Post("/auth/totp/disable", totpHandler.Disable)
+	}
+
+	// Challenge (step-up auth)
+	if challengeHandler != nil {
+		protected.Post("/auth/challenge/request", challengeHandler.Request)
+		protected.Post("/auth/challenge/verify", challengeHandler.Verify)
+	}
 
 	// Users: GET /api/v1/users/get?id=xxx
 	users := protected.Group("/users")
@@ -104,10 +136,18 @@ func NewRouter(
 	transfers := protected.Group("/transfers")
 	transfers.Use(middleware.HMACMiddleware(hmacSigner))
 	transfers.Use(middleware.IdempotencyMiddleware(redisClient, 24*time.Hour))
-	transfers.Post("/send", transferHandler.Send)
+	transfers.Post("/send", middleware.RequireChallenge(challengeService), transferHandler.Send)
 	transfers.Get("/get", transferHandler.GetByID)          // ?id=xxx
 	transfers.Get("/list", transferHandler.ListByAccount)   // ?account_id=xxx
 	transfers.Get("/history", transferHandler.History)      // ?id=xxx
+
+	// Scheduled transfers
+	if scheduledHandler != nil {
+		transfers.Post("/scheduled", scheduledHandler.Schedule)
+		transfers.Post("/scheduled/cancel", scheduledHandler.Cancel)
+		transfers.Get("/scheduled/get", scheduledHandler.GetByID)
+		transfers.Get("/scheduled/list", scheduledHandler.List)
+	}
 
 	// Cards — RESTful design (HMAC signed)
 	cards := protected.Group("/cards")
@@ -118,6 +158,19 @@ func NewRouter(
 	cards.Post("/:id/activate", cardHandler.Activate)
 	cards.Post("/:id/verify-pin", cardHandler.VerifyPIN)
 	cards.Put("/:id/pin", cardHandler.ChangePIN)
+	// Tokenization, 3DS, EMV, Holds
+	if cardExtHandler != nil {
+		cards.Post("/:id/tokenize", cardExtHandler.Tokenize)
+		cards.Get("/:id/tokens", cardExtHandler.ListTokens)
+		cards.Post("/tokens/revoke", cardExtHandler.RevokeToken)
+		cards.Post("/:id/3ds/enroll", cardExtHandler.Enroll3DS)
+		cards.Post("/:id/emv", cardExtHandler.SetEMV)
+		cards.Get("/:id/holds", cardExtHandler.ListHolds)
+		cards.Post("/holds", cardExtHandler.CreateHold)
+		cards.Post("/holds/:id/capture", cardExtHandler.CaptureHold)
+		cards.Post("/holds/:id/release", cardExtHandler.ReleaseHold)
+	}
+
 	// Card admin operations (ADMIN only)
 	cardAdmin := cards.Group("", middleware.RequireRole("ADMIN"))
 	cardAdmin.Post("/:id/block", cardHandler.Block)
@@ -129,6 +182,14 @@ func NewRouter(
 	currencies.Get("/rates", exchangeHandler.ListRates)
 	currencies.Post("/convert", middleware.AuthMiddleware(jwtService), exchangeHandler.Convert)
 	currencies.Post("/rate", middleware.AuthMiddleware(jwtService), middleware.RequireRole("ADMIN"), exchangeHandler.UpsertRate)
+
+	// Contacts
+	if contactHandler != nil {
+		contacts := protected.Group("/contacts")
+		contacts.Post("/add", contactHandler.Add)
+		contacts.Get("/list", contactHandler.List)
+		contacts.Delete("/delete", contactHandler.Delete)
+	}
 
 	// Beneficiaries
 	bens := protected.Group("/beneficiaries")
@@ -158,6 +219,18 @@ func NewRouter(
 	adminFraud := admin.Group("/fraud")
 	adminFraud.Get("/flagged", fraudHandler.ListFlagged)
 	adminFraud.Get("/check", fraudHandler.GetByTransfer)
+
+	// Audit admin
+	if auditHandler != nil {
+		admin.Get("/audit", auditHandler.List)
+	}
+
+	// Reconciliation admin
+	if reconHandler != nil {
+		adminRecon := admin.Group("/reconciliation")
+		adminRecon.Get("/check", reconHandler.CheckAccount)
+		adminRecon.Get("/check-all", reconHandler.CheckAllByUser)
+	}
 
 	return app
 }

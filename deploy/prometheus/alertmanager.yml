@@ -1,0 +1,41 @@
+global:
+  resolve_timeout: 5m
+
+route:
+  receiver: default
+  group_by: ['alertname', 'severity']
+  group_wait: 30s
+  group_interval: 5m
+  repeat_interval: 4h
+
+  routes:
+    # Critical alerts — shorter repeat interval
+    - match:
+        severity: critical
+      receiver: critical
+      repeat_interval: 1h
+
+    # Warning alerts
+    - match:
+        severity: warning
+      receiver: default
+      repeat_interval: 4h
+
+receivers:
+  - name: default
+    webhook_configs:
+      - url: 'http://api:3000/internal/alerts'
+        send_resolved: true
+
+  - name: critical
+    webhook_configs:
+      - url: 'http://api:3000/internal/alerts'
+        send_resolved: true
+
+# Inhibition: if critical fires, suppress warning for same alertname
+inhibit_rules:
+  - source_match:
+      severity: critical
+    target_match:
+      severity: warning
+    equal: ['alertname']

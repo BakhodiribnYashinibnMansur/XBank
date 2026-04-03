@@ -1,0 +1,171 @@
+{
+  "annotations": { "list": [] },
+  "editable": true,
+  "graphTooltip": 1,
+  "id": null,
+  "links": [
+    { "title": "Overview", "url": "/d/xbank-overview", "type": "link" }
+  ],
+  "panels": [
+    {
+      "title": "Service Operation Latency (p50 / p95 / p99)",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 0 },
+      "targets": [
+        {
+          "expr": "histogram_quantile(0.50, sum(rate(xbank_service_operation_duration_seconds_bucket[5m])) by (le))",
+          "legendFormat": "p50"
+        },
+        {
+          "expr": "histogram_quantile(0.95, sum(rate(xbank_service_operation_duration_seconds_bucket[5m])) by (le))",
+          "legendFormat": "p95"
+        },
+        {
+          "expr": "histogram_quantile(0.99, sum(rate(xbank_service_operation_duration_seconds_bucket[5m])) by (le))",
+          "legendFormat": "p99"
+        }
+      ],
+      "fieldConfig": { "defaults": { "unit": "s" } }
+    },
+    {
+      "title": "Service Latency by Service (p95)",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 0 },
+      "targets": [
+        {
+          "expr": "histogram_quantile(0.95, sum(rate(xbank_service_operation_duration_seconds_bucket[5m])) by (le, service))",
+          "legendFormat": "{{service}}"
+        }
+      ],
+      "fieldConfig": { "defaults": { "unit": "s" } }
+    },
+    {
+      "title": "Operation Throughput by Service",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 8 },
+      "targets": [
+        {
+          "expr": "sum(rate(xbank_service_operations_total[5m])) by (service)",
+          "legendFormat": "{{service}}"
+        }
+      ],
+      "fieldConfig": { "defaults": { "unit": "ops" } }
+    },
+    {
+      "title": "Error Rate by Service",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 8 },
+      "targets": [
+        {
+          "expr": "sum(rate(xbank_service_operations_total{status=\"error\"}[5m])) by (service) / sum(rate(xbank_service_operations_total[5m])) by (service) * 100",
+          "legendFormat": "{{service}}"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percent",
+          "custom": { "fillOpacity": 15 },
+          "thresholds": {
+            "steps": [
+              { "color": "green", "value": null },
+              { "color": "yellow", "value": 5 },
+              { "color": "red", "value": 10 }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "title": "Top Operations by Latency (p95)",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 16 },
+      "targets": [
+        {
+          "expr": "topk(10, histogram_quantile(0.95, sum(rate(xbank_service_operation_duration_seconds_bucket[5m])) by (le, service, operation)))",
+          "legendFormat": "{{service}}.{{operation}}"
+        }
+      ],
+      "fieldConfig": { "defaults": { "unit": "s" } }
+    },
+    {
+      "title": "Top Error Operations",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 16 },
+      "targets": [
+        {
+          "expr": "topk(10, sum(rate(xbank_service_operations_total{status=\"error\"}[5m])) by (service, operation))",
+          "legendFormat": "{{service}}.{{operation}}"
+        }
+      ],
+      "fieldConfig": { "defaults": { "unit": "ops" } }
+    },
+    {
+      "title": "Business Operations Summary",
+      "type": "stat",
+      "gridPos": { "h": 4, "w": 4, "x": 0, "y": 24 },
+      "targets": [
+        { "expr": "sum(xbank_business_accounts_created_total) or vector(0)" }
+      ],
+      "fieldConfig": {
+        "defaults": { "displayName": "Accounts Created" }
+      }
+    },
+    {
+      "title": "Total Transfers",
+      "type": "stat",
+      "gridPos": { "h": 4, "w": 4, "x": 4, "y": 24 },
+      "targets": [
+        { "expr": "sum(xbank_business_transfers_total) or vector(0)" }
+      ]
+    },
+    {
+      "title": "Total Deposits",
+      "type": "stat",
+      "gridPos": { "h": 4, "w": 4, "x": 8, "y": 24 },
+      "targets": [
+        { "expr": "sum(xbank_business_deposits_total) or vector(0)" }
+      ]
+    },
+    {
+      "title": "Total Withdrawals",
+      "type": "stat",
+      "gridPos": { "h": 4, "w": 4, "x": 12, "y": 24 },
+      "targets": [
+        { "expr": "sum(xbank_business_withdrawals_total) or vector(0)" }
+      ]
+    },
+    {
+      "title": "Total Logins",
+      "type": "stat",
+      "gridPos": { "h": 4, "w": 4, "x": 16, "y": 24 },
+      "targets": [
+        { "expr": "sum(xbank_business_logins_total{status=\"success\"}) or vector(0)" }
+      ]
+    },
+    {
+      "title": "Accounts Closed",
+      "type": "stat",
+      "gridPos": { "h": 4, "w": 4, "x": 20, "y": 24 },
+      "targets": [
+        { "expr": "sum(xbank_business_accounts_closed_total) or vector(0)" }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "thresholds": {
+            "steps": [
+              { "color": "green", "value": null },
+              { "color": "red", "value": 10 }
+            ]
+          }
+        }
+      }
+    }
+  ],
+  "refresh": "10s",
+  "schemaVersion": 39,
+  "tags": ["xbank", "services", "application"],
+  "templating": { "list": [] },
+  "time": { "from": "now-1h", "to": "now" },
+  "title": "XBank Application Services",
+  "uid": "xbank-services"
+}

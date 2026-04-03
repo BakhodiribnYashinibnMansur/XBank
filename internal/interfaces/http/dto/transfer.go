@@ -18,6 +18,29 @@ type TransferEventResponse struct {
 	OccuredAt time.Time   `json:"occurred_at"`
 }
 
+type ScheduleTransferRequest struct {
+	FromAccountID string `json:"from_account_id"`
+	ToAccountID   string `json:"to_account_id"`
+	Amount        int64  `json:"amount"`
+	Currency      string `json:"currency"`
+	Description   string `json:"description"`
+	ExecuteAt     string `json:"execute_at"` // RFC3339 format
+}
+
+type ScheduledTransferResponse struct {
+	ID            string  `json:"id"`
+	FromAccountID string  `json:"from_account_id"`
+	ToAccountID   string  `json:"to_account_id"`
+	Amount        int64   `json:"amount"`
+	Currency      string  `json:"currency"`
+	Description   string  `json:"description"`
+	Status        string  `json:"status"`
+	ExecuteAt     string  `json:"execute_at"`
+	TransferID    string  `json:"transfer_id,omitempty"`
+	FailureReason string  `json:"failure_reason,omitempty"`
+	CreatedAt     string  `json:"created_at"`
+}
+
 type TransferResponse struct {
 	ID            string    `json:"id"`
 	FromAccountID string    `json:"from_account_id"`

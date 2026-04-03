@@ -4,12 +4,12 @@ import (
 	"context"
 	"time"
 
-	"github.com/BakhodiribnYashinibnMansur/XBank/pkg/apperror"
+	"github.com/BakhodiribnYashinibnMansur/XBank/internal/domain/shared"
 )
 
 var (
-	ErrFraudDetected = apperror.ErrFraudDetected
-	ErrAMLBlocked    = apperror.ErrAMLBlocked
+	ErrFraudDetected = shared.NewDomainError("FRAUD_DETECTED", "suspicious activity detected")
+	ErrAMLBlocked    = shared.NewDomainError("AML_BLOCKED", "transaction blocked by AML screening")
 )
 
 type RiskLevel string

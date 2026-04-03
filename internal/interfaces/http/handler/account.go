@@ -46,7 +46,7 @@ func (h *AccountHandler) Create(c *fiber.Ctx) error {
 		return err
 	}
 
-	return c.Status(http.StatusCreated).JSON(toAccountResponse(acc))
+	return apperror.Success(c, http.StatusCreated, toAccountResponse(acc))
 }
 
 // GetByID godoc
@@ -69,7 +69,7 @@ func (h *AccountHandler) GetByID(c *fiber.Ctx) error {
 		return err
 	}
 
-	return c.JSON(toAccountResponse(acc))
+	return apperror.Success(c, http.StatusOK, toAccountResponse(acc))
 }
 
 // List godoc
@@ -98,7 +98,7 @@ func (h *AccountHandler) List(c *fiber.Ctx) error {
 		data = []dto.AccountResponse{}
 	}
 
-	return c.JSON(dto.PaginatedResponse{
+	return apperror.Success(c, http.StatusOK, dto.PaginatedResponse{
 		Data:       data,
 		Pagination: dto.PaginationResponse{Page: pg.Page, Limit: pg.Limit, Total: total},
 	})
@@ -132,7 +132,7 @@ func (h *AccountHandler) Deposit(c *fiber.Ctx) error {
 		return err
 	}
 
-	return c.JSON(toAccountResponse(acc))
+	return apperror.Success(c, http.StatusOK, toAccountResponse(acc))
 }
 
 // Withdraw godoc
@@ -163,7 +163,7 @@ func (h *AccountHandler) Withdraw(c *fiber.Ctx) error {
 		return err
 	}
 
-	return c.JSON(toAccountResponse(acc))
+	return apperror.Success(c, http.StatusOK, toAccountResponse(acc))
 }
 
 // Close godoc
@@ -189,7 +189,7 @@ func (h *AccountHandler) Close(c *fiber.Ctx) error {
 		return err
 	}
 
-	return c.JSON(fiber.Map{"message": "Account closed"})
+	return apperror.Success(c, http.StatusOK, fiber.Map{"message": "Account closed"})
 }
 
 // History godoc
@@ -223,7 +223,7 @@ func (h *AccountHandler) History(c *fiber.Ctx) error {
 		})
 	}
 
-	return c.JSON(resp)
+	return apperror.Success(c, http.StatusOK, resp)
 }
 
 func toAccountResponse(a *account.Account) dto.AccountResponse {

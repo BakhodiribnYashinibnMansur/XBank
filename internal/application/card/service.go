@@ -113,6 +113,40 @@ func (s *Service) Unblock(ctx context.Context, cardID string) (err error) {
 	return s.repo.Update(ctx, c)
 }
 
+// Enroll3DS - enroll a card in 3D Secure
+func (s *Service) Enroll3DS(ctx context.Context, cardID, version string) (_ *card.Card, err error) {
+	defer metrics.ObserveService("CardService", "Enroll3DS", time.Now(), &err)
+
+	c, err := s.repo.GetByID(ctx, cardID)
+	if err != nil {
+		return nil, err
+	}
+	if err := c.Enroll3DS(version); err != nil {
+		return nil, err
+	}
+	if err := s.repo.Update(ctx, c); err != nil {
+		return nil, err
+	}
+	return c, nil
+}
+
+// SetEMVAID - set EMV Application Identifier for a card
+func (s *Service) SetEMVAID(ctx context.Context, cardID, aid string) (_ *card.Card, err error) {
+	defer metrics.ObserveService("CardService", "SetEMVAID", time.Now(), &err)
+
+	c, err := s.repo.GetByID(ctx, cardID)
+	if err != nil {
+		return nil, err
+	}
+	if err := c.SetEMVAID(aid); err != nil {
+		return nil, err
+	}
+	if err := s.repo.Update(ctx, c); err != nil {
+		return nil, err
+	}
+	return c, nil
+}
+
 func (s *Service) GetByID(ctx context.Context, cardID string) (_ *card.Card, err error) {
 	defer metrics.ObserveService("CardService", "GetByID", time.Now(), &err)
 	return s.repo.GetByID(ctx, cardID)

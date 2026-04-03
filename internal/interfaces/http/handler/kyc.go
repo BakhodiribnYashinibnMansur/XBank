@@ -42,7 +42,7 @@ func (h *KYCHandler) Submit(c *fiber.Ctx) error {
 		return err
 	}
 
-	return c.Status(http.StatusCreated).JSON(toKYCResponse(v))
+	return apperror.Success(c, http.StatusCreated, toKYCResponse(v))
 }
 
 // Status godoc
@@ -58,7 +58,7 @@ func (h *KYCHandler) Status(c *fiber.Ctx) error {
 	if err != nil {
 		return err
 	}
-	return c.JSON(toKYCResponse(v))
+	return apperror.Success(c, http.StatusOK, toKYCResponse(v))
 }
 
 // Approve godoc
@@ -79,7 +79,7 @@ func (h *KYCHandler) Approve(c *fiber.Ctx) error {
 	if err := h.service.Approve(c.Context(), req.VerificationID, reviewerID); err != nil {
 		return err
 	}
-	return c.JSON(fiber.Map{"message": "KYC approved"})
+	return apperror.Success(c, http.StatusOK, fiber.Map{"message": "KYC approved"})
 }
 
 // Reject godoc
@@ -100,7 +100,7 @@ func (h *KYCHandler) Reject(c *fiber.Ctx) error {
 	if err := h.service.Reject(c.Context(), req.VerificationID, reviewerID, req.Reason); err != nil {
 		return err
 	}
-	return c.JSON(fiber.Map{"message": "KYC rejected"})
+	return apperror.Success(c, http.StatusOK, fiber.Map{"message": "KYC rejected"})
 }
 
 // ListPending godoc
@@ -127,7 +127,7 @@ func (h *KYCHandler) ListPending(c *fiber.Ctx) error {
 		data = []dto.KYCResponse{}
 	}
 
-	return c.JSON(dto.PaginatedResponse{
+	return apperror.Success(c, http.StatusOK, dto.PaginatedResponse{
 		Data:       data,
 		Pagination: dto.PaginationResponse{Page: pg.Page, Limit: pg.Limit, Total: total},
 	})

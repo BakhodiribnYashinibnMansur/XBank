@@ -4,12 +4,12 @@ import (
 	"context"
 	"time"
 
-	"github.com/BakhodiribnYashinibnMansur/XBank/pkg/apperror"
+	"github.com/BakhodiribnYashinibnMansur/XBank/internal/domain/shared"
 )
 
 var (
-	ErrKYCRequired = apperror.ErrKYCRequired
-	ErrKYCPending  = apperror.ErrKYCPending
+	ErrKYCRequired = shared.NewDomainError("KYC_REQUIRED", "KYC verification required")
+	ErrKYCPending  = shared.NewDomainError("KYC_PENDING", "KYC verification is pending")
 )
 
 type Status string
@@ -46,7 +46,7 @@ type Verification struct {
 
 func NewVerification(userID string, docType DocType, docNumber, firstName, lastName, dob string) (*Verification, error) {
 	if userID == "" || docNumber == "" || firstName == "" {
-		return nil, apperror.ErrMissingField.WithMessage("user_id, document_number and first_name are required")
+		return nil, shared.NewDomainError("MISSING_FIELD", "user_id, document_number and first_name are required")
 	}
 
 	now := time.Now()

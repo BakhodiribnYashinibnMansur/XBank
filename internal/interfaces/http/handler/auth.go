@@ -1,6 +1,8 @@
 package handler
 
 import (
+	"net/http"
+
 	authApp "github.com/BakhodiribnYashinibnMansur/XBank/internal/application/auth"
 	"github.com/BakhodiribnYashinibnMansur/XBank/internal/interfaces/http/dto"
 	"github.com/BakhodiribnYashinibnMansur/XBank/pkg/apperror"
@@ -39,7 +41,18 @@ func (h *AuthHandler) Login(c *fiber.Ctx) error {
 		return err
 	}
 
-	return c.JSON(dto.AuthResponse{
+	// If TOTP is required, return partial response (no tokens)
+	if result.TOTPRequired {
+		return apperror.Success(c, http.StatusOK, dto.AuthResponse{
+			TOTPRequired: true,
+			User: dto.UserResponse{
+				ID:    result.User.ID,
+				Email: result.User.Email,
+			},
+		})
+	}
+
+	return apperror.Success(c, http.StatusOK, dto.AuthResponse{
 		AccessToken:  result.AccessToken,
 		RefreshToken: result.RefreshToken,
 		User: dto.UserResponse{
@@ -76,7 +89,7 @@ func (h *AuthHandler) Refresh(c *fiber.Ctx) error {
 		return err
 	}
 
-	return c.JSON(dto.AuthResponse{
+	return apperror.Success(c, http.StatusOK, dto.AuthResponse{
 		AccessToken:  result.AccessToken,
 		RefreshToken: result.RefreshToken,
 		User: dto.UserResponse{
@@ -105,7 +118,7 @@ func (h *AuthHandler) Logout(c *fiber.Ctx) error {
 
 	h.authService.Logout(c.Context(), req.RefreshToken)
 
-	return c.JSON(fiber.Map{"message": "Logged out successfully"})
+	return apperror.Success(c, http.StatusOK, fiber.Map{"message": "Logged out successfully"})
 }
 
 // LogoutAll godoc
@@ -122,5 +135,5 @@ func (h *AuthHandler) LogoutAll(c *fiber.Ctx) error {
 		return err
 	}
 
-	return c.JSON(fiber.Map{"message": "All sessions terminated"})
+	return apperror.Success(c, http.StatusOK, fiber.Map{"message": "All sessions terminated"})
 }

@@ -1,0 +1,244 @@
+groups:
+  - name: xbank.http
+    rules:
+      # High error rate (>5% of requests are 5xx)
+      - alert: HighErrorRate
+        expr: |
+          sum(rate(xbank_http_requests_total{status=~"5.."}[5m]))
+          /
+          sum(rate(xbank_http_requests_total[5m]))
+          > 0.05
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: "High HTTP 5xx error rate (>5%)"
+          description: "{{ $value | humanizePercentage }} of requests are failing with 5xx"
+
+      # High latency (p95 > 2 seconds)
+      - alert: HighLatency
+        expr: |
+          histogram_quantile(0.95, sum(rate(xbank_http_request_duration_seconds_bucket[5m])) by (le))
+          > 2
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High HTTP latency (p95 > 2s)"
+          description: "p95 latency is {{ $value }}s"
+
+      # Too many active requests (possible connection leak or DDoS)
+      - alert: HighActiveRequests
+        expr: xbank_http_active_requests > 500
+        for: 1m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Unusually high number of active HTTP requests"
+          description: "{{ $value }} requests in flight"
+
+      # 4xx spike (possible scanning or fuzzing)
+      - alert: ClientErrorSpike
+        expr: |
+          sum(rate(xbank_http_requests_total{status=~"4.."}[5m]))
+          /
+          sum(rate(xbank_http_requests_total[5m]))
+          > 0.3
+        for: 3m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High client error rate (>30% of requests are 4xx)"
+          description: "{{ $value | humanizePercentage }} — possible scanning or misconfigured client"
+
+  - name: xbank.database
+    rules:
+      # Slow queries increasing
+      - alert: SlowQueriesHigh
+        expr: sum(rate(xbank_db_slow_queries_total[5m])) > 0.5
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High rate of slow DB queries (>100ms)"
+          description: "{{ $value }} slow queries per second"
+
+      # DB pool exhaustion (>80% used)
+      - alert: DBPoolExhaustion
+        expr: |
+          xbank_db_pool_connections{state="in_use"}
+          /
+          (xbank_db_pool_connections{state="in_use"} + xbank_db_pool_connections{state="idle"})
+          > 0.8
+        for: 3m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Database connection pool >80% utilized"
+          description: "{{ $value | humanizePercentage }} of pool connections are in use"
+
+      # DB query error rate
+      - alert: DBQueryErrorRate
+        expr: |
+          sum(rate(xbank_db_queries_total{status="error"}[5m]))
+          /
+          sum(rate(xbank_db_queries_total[5m]))
+          > 0.05
+        for: 3m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Database query error rate >5%"
+          description: "{{ $value | humanizePercentage }} of DB queries are failing"
+
+      # DB p99 latency
+      - alert: DBHighLatency
+        expr: |
+          histogram_quantile(0.99, sum(rate(xbank_db_query_duration_seconds_bucket[5m])) by (le))
+          > 1
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Database p99 latency exceeds 1 second"
+          description: "p99 query latency is {{ $value }}s"
+
+  - name: xbank.business
+    rules:
+      # Transfer failure rate high
+      - alert: TransferFailureRateHigh
+        expr: |
+          sum(rate(xbank_business_transfers_total{status="failed"}[10m]))
+          /
+          sum(rate(xbank_business_transfers_total[10m]))
+          > 0.1
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Transfer failure rate >10%"
+          description: "{{ $value | humanizePercentage }} of transfers are failing"
+
+      # Brute-force login attempts
+      - alert: LoginBruteForce
+        expr: sum(rate(xbank_business_logins_total{status="failed"}[5m])) > 1
+        for: 2m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High rate of failed logins (possible brute-force)"
+          description: "{{ $value }} failed logins per second"
+
+      # Account lockouts spike
+      - alert: AccountLockoutsSpike
+        expr: sum(rate(xbank_business_logins_total{status="locked"}[5m])) > 0.1
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Account lockouts detected"
+          description: "{{ $value }} lockouts per second — possible credential stuffing attack"
+
+      # No deposits for extended period (business anomaly)
+      - alert: NoDepositsAnomaly
+        expr: sum(rate(xbank_business_deposits_total[30m])) == 0
+        for: 30m
+        labels:
+          severity: warning
+        annotations:
+          summary: "No deposits received in 30 minutes during business hours"
+          description: "Potential system issue — payment processing may be down"
+
+  - name: xbank.kafka
+    rules:
+      # Kafka publish failures (DLQ growing)
+      - alert: KafkaDLQGrowing
+        expr: sum(rate(xbank_kafka_messages_total{status="dlq"}[5m])) > 0
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Kafka messages going to DLQ"
+          description: "{{ $value }} messages/s failing to publish to Kafka"
+
+      # Kafka consumer errors
+      - alert: KafkaConsumeErrors
+        expr: sum(rate(xbank_kafka_messages_total{status="consume_error"}[5m])) > 0.1
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Kafka consumer processing errors"
+          description: "{{ $value }} consume errors/s — check message handlers"
+
+      # Kafka publish latency high
+      - alert: KafkaPublishLatencyHigh
+        expr: |
+          histogram_quantile(0.95, sum(rate(xbank_kafka_publish_duration_seconds_bucket[5m])) by (le))
+          > 0.5
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Kafka publish p95 latency >500ms"
+          description: "p95 publish latency is {{ $value }}s — Kafka broker may be overloaded"
+
+  - name: xbank.service
+    rules:
+      # Application service error rate
+      - alert: ServiceErrorRateHigh
+        expr: |
+          sum(rate(xbank_service_operations_total{status="error"}[5m])) by (service)
+          /
+          sum(rate(xbank_service_operations_total[5m])) by (service)
+          > 0.1
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Service {{ $labels.service }} error rate >10%"
+          description: "{{ $value | humanizePercentage }} of {{ $labels.service }} operations are failing"
+
+      # Service latency p95
+      - alert: ServiceHighLatency
+        expr: |
+          histogram_quantile(0.95, sum(rate(xbank_service_operation_duration_seconds_bucket[5m])) by (le, service))
+          > 3
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Service {{ $labels.service }} p95 latency >3s"
+          description: "p95 operation latency is {{ $value }}s"
+
+  - name: xbank.security
+    rules:
+      # Credential stuffing detection (many failed logins from patterns)
+      - alert: CredentialStuffing
+        expr: sum(rate(xbank_business_logins_total{status="failed"}[2m])) > 5
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Possible credential stuffing attack"
+          description: "{{ $value }} failed logins/s — exceeds normal threshold by 5x"
+
+      # Unusual account closure rate
+      - alert: MassAccountClosure
+        expr: sum(rate(xbank_business_accounts_closed_total[10m])) > 0.5
+        for: 5m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Unusual account closure rate detected"
+          description: "{{ $value }} accounts closed/s — possible unauthorized bulk operation"
+
+      # DLQ retry failures (persistent message processing issues)
+      - alert: DLQRetryFailures
+        expr: sum(rate(xbank_kafka_messages_total{status="dlq_retry_fail"}[10m])) > 0
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "DLQ retry failures persisting for 10+ minutes"
+          description: "{{ $value }} failed retries/s — messages may be permanently unprocessable"

@@ -4,16 +4,17 @@ import (
 	"context"
 	"time"
 
-	"github.com/BakhodiribnYashinibnMansur/XBank/pkg/apperror"
+	"github.com/BakhodiribnYashinibnMansur/XBank/internal/domain/shared"
 	"golang.org/x/crypto/bcrypt"
 )
 
 var (
-	ErrCardNotFound        = apperror.ErrCardNotFound
-	ErrCardBlocked         = apperror.ErrCardBlocked
-	ErrCardExpired         = apperror.ErrCardExpired
-	ErrInvalidPIN          = apperror.ErrInvalidPIN
-	ErrPINAttemptsExceeded = apperror.ErrPINAttemptsExceeded
+	ErrCardNotFound        = shared.NewDomainError("CARD_NOT_FOUND", "card not found")
+	ErrCardBlocked         = shared.NewDomainError("CARD_BLOCKED", "card is blocked")
+	ErrCardExpired         = shared.NewDomainError("CARD_EXPIRED", "card has expired")
+	ErrInvalidPIN          = shared.NewDomainError("INVALID_PIN", "invalid PIN")
+	ErrPINAttemptsExceeded = shared.NewDomainError("PIN_ATTEMPTS_EXCEEDED", "card locked: too many wrong PIN attempts")
+	ErrCardValidation      = shared.NewDomainError("CARD_VALIDATION", "card validation error")
 )
 
 type Type string
@@ -45,14 +46,20 @@ type Card struct {
 	CardType      Type
 	Status        Status
 	PINAttempts   int // wrong PIN attempt counter
-	CreatedAt     time.Time
-	UpdatedAt     time.Time
+
+	// 3D Secure / EMV
+	ThreeDSEnrolled bool   // enrolled in 3D Secure
+	ThreeDSVersion  string // "2.1", "2.2" etc.
+	EMVAID          string // Application Identifier (e.g. "A0000000041010" for Mastercard)
+
+	CreatedAt time.Time
+	UpdatedAt time.Time
 }
 
 // NewCard - create a new card (INACTIVE by default, needs activation)
 func NewCard(accountID string, cardType Type) (*Card, error) {
 	if accountID == "" {
-		return nil, apperror.ErrMissingField.WithMessage("account_id cannot be empty")
+		return nil, shared.NewDomainError("MISSING_FIELD", "account_id cannot be empty")
 	}
 
 	pan, err := GenerateCardNumber()
@@ -78,7 +85,7 @@ func NewCard(accountID string, cardType Type) (*Card, error) {
 // Activate - activate the card by setting a PIN
 func (c *Card) Activate(pin string) error {
 	if c.Status != StatusInactive {
-		return apperror.ErrValidation.WithMessage("Only inactive cards can be activated")
+		return shared.NewDomainError("CARD_VALIDATION", "only inactive cards can be activated")
 	}
 
 	if len(pin) != 4 {
@@ -147,7 +154,7 @@ func (c *Card) ChangePIN(oldPIN, newPIN string) error {
 // Block - block the card
 func (c *Card) Block() error {
 	if c.Status == StatusCancelled {
-		return apperror.ErrValidation.WithMessage("Cannot block a cancelled card")
+		return shared.NewDomainError("CARD_VALIDATION", "cannot block a cancelled card")
 	}
 	c.Status = StatusBlocked
 	c.UpdatedAt = time.Now()
@@ -157,7 +164,7 @@ func (c *Card) Block() error {
 // Unblock - unblock the card and reset PIN attempts
 func (c *Card) Unblock() error {
 	if c.Status != StatusBlocked {
-		return apperror.ErrValidation.WithMessage("Card is not blocked")
+		return shared.NewDomainError("CARD_VALIDATION", "card is not blocked")
 	}
 	c.Status = StatusActive
 	c.PINAttempts = 0
@@ -182,18 +189,39 @@ func (c *Card) IsExpired() bool {
 func (c *Card) checkUsable() error {
 	switch c.Status {
 	case StatusInactive:
-		return apperror.ErrValidation.WithMessage("Card is not activated")
+		return shared.NewDomainError("CARD_VALIDATION", "card is not activated")
 	case StatusBlocked:
 		return ErrCardBlocked
 	case StatusExpired:
 		return ErrCardExpired
 	case StatusCancelled:
-		return apperror.ErrValidation.WithMessage("Card is cancelled")
+		return shared.NewDomainError("CARD_VALIDATION", "card is cancelled")
 	}
 	if c.IsExpired() {
 		c.Status = StatusExpired
 		return ErrCardExpired
 	}
+	return nil
+}
+
+// Enroll3DS - enroll the card in 3D Secure
+func (c *Card) Enroll3DS(version string) error {
+	if err := c.checkUsable(); err != nil {
+		return err
+	}
+	c.ThreeDSEnrolled = true
+	c.ThreeDSVersion = version
+	c.UpdatedAt = time.Now()
+	return nil
+}
+
+// SetEMVAID - set the EMV Application Identifier
+func (c *Card) SetEMVAID(aid string) error {
+	if err := c.checkUsable(); err != nil {
+		return err
+	}
+	c.EMVAID = aid
+	c.UpdatedAt = time.Now()
 	return nil
 }
 

@@ -4,12 +4,12 @@ import (
 	"context"
 	"time"
 
-	"github.com/BakhodiribnYashinibnMansur/XBank/pkg/apperror"
+	"github.com/BakhodiribnYashinibnMansur/XBank/internal/domain/shared"
 )
 
 var (
-	ErrBeneficiaryNotFound = apperror.ErrBeneficiaryNotFound
-	ErrBeneficiaryExists   = apperror.ErrBeneficiaryExists
+	ErrBeneficiaryNotFound = shared.NewDomainError("BENEFICIARY_NOT_FOUND", "beneficiary not found")
+	ErrBeneficiaryExists   = shared.NewDomainError("BENEFICIARY_EXISTS", "beneficiary already exists")
 )
 
 type Type string
@@ -37,13 +37,13 @@ type Beneficiary struct {
 // NewBeneficiary - create a new beneficiary
 func NewBeneficiary(userID, name, accountNumber, bankName, bankCode, currency string, benType Type) (*Beneficiary, error) {
 	if userID == "" {
-		return nil, apperror.ErrMissingField.WithMessage("user_id is required")
+		return nil, shared.NewDomainError("MISSING_FIELD", "user_id is required")
 	}
 	if name == "" {
-		return nil, apperror.ErrMissingField.WithMessage("name is required")
+		return nil, shared.NewDomainError("MISSING_FIELD", "name is required")
 	}
 	if accountNumber == "" {
-		return nil, apperror.ErrMissingField.WithMessage("account_number is required")
+		return nil, shared.NewDomainError("MISSING_FIELD", "account_number is required")
 	}
 
 	return &Beneficiary{

@@ -13,3 +13,7 @@ func NewTxManager() *TxManager {
 func (m *TxManager) WithTx(ctx context.Context, fn func(ctx context.Context) error) error {
 	return fn(ctx)
 }
+
+func (m *TxManager) WithSerializableTx(ctx context.Context, fn func(ctx context.Context) error) error {
+	return fn(ctx)
+}

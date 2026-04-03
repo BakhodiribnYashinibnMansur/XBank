@@ -4,11 +4,11 @@ import (
 	"context"
 	"time"
 
-	"github.com/BakhodiribnYashinibnMansur/XBank/pkg/apperror"
+	"github.com/BakhodiribnYashinibnMansur/XBank/internal/domain/shared"
 )
 
 var (
-	ErrRateNotFound = apperror.NotFound(4501, "Exchange rate not found")
+	ErrRateNotFound = shared.NewDomainError("RATE_NOT_FOUND", "exchange rate not found")
 )
 
 // Rate - exchange rate between two currencies

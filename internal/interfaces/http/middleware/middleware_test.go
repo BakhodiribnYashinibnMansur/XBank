@@ -1,6 +1,8 @@
 package middleware
 
 import (
+	"bytes"
+	"context"
 	"crypto/ecdsa"
 	"crypto/elliptic"
 	"crypto/rand"
@@ -11,10 +13,12 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"strconv"
 	"testing"
 	"time"
 
 	infraAuth "github.com/BakhodiribnYashinibnMansur/XBank/internal/infrastructure/auth"
+	infraCrypto "github.com/BakhodiribnYashinibnMansur/XBank/internal/infrastructure/crypto"
 	"github.com/BakhodiribnYashinibnMansur/XBank/pkg/apperror"
 	"github.com/BakhodiribnYashinibnMansur/XBank/pkg/logger"
 	"github.com/gofiber/fiber/v2"
@@ -156,5 +160,171 @@ func TestAuthMiddleware_ValidToken(t *testing.T) {
 	}
 	if result["email"] != "ali@example.com" {
 		t.Errorf("email kutilgan: ali@example.com, kelgan: %s", result["email"])
+	}
+}
+
+// --- HMAC Middleware Tests ---
+
+func newTestHMACSigner(t *testing.T) *infraCrypto.HMACSigner {
+	t.Helper()
+	secret, _ := infraCrypto.GenerateHMACSecret()
+	signer, err := infraCrypto.NewHMACSigner(secret, 5*time.Minute)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return signer
+}
+
+func TestHMACMiddleware_ValidSignature(t *testing.T) {
+	signer := newTestHMACSigner(t)
+	app := newTestApp()
+	app.Post("/transfer", HMACMiddleware(signer), func(c *fiber.Ctx) error {
+		return c.JSON(fiber.Map{"ok": true})
+	})
+
+	body := []byte(`{"amount":1000}`)
+	ts := time.Now().Unix()
+	sig := signer.Sign(ts, body)
+
+	req, _ := http.NewRequest(http.MethodPost, "/transfer", bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("X-Signature", sig)
+	req.Header.Set("X-Signature-Timestamp", strconv.FormatInt(ts, 10))
+
+	resp, _ := app.Test(req)
+	if resp.StatusCode != http.StatusOK {
+		t.Errorf("valid HMAC should return 200, got %d", resp.StatusCode)
+	}
+}
+
+func TestHMACMiddleware_MissingHeaders(t *testing.T) {
+	signer := newTestHMACSigner(t)
+	app := newTestApp()
+	app.Post("/transfer", HMACMiddleware(signer), func(c *fiber.Ctx) error {
+		return c.JSON(fiber.Map{"ok": true})
+	})
+
+	req, _ := http.NewRequest(http.MethodPost, "/transfer", bytes.NewReader([]byte(`{}`)))
+	req.Header.Set("Content-Type", "application/json")
+
+	resp, _ := app.Test(req)
+	if resp.StatusCode != http.StatusUnauthorized {
+		t.Errorf("missing HMAC headers should return 401, got %d", resp.StatusCode)
+	}
+}
+
+func TestHMACMiddleware_TamperedBody(t *testing.T) {
+	signer := newTestHMACSigner(t)
+	app := newTestApp()
+	app.Post("/transfer", HMACMiddleware(signer), func(c *fiber.Ctx) error {
+		return c.JSON(fiber.Map{"ok": true})
+	})
+
+	body := []byte(`{"amount":1000}`)
+	ts := time.Now().Unix()
+	sig := signer.Sign(ts, body)
+
+	tampered := []byte(`{"amount":999999}`)
+	req, _ := http.NewRequest(http.MethodPost, "/transfer", bytes.NewReader(tampered))
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("X-Signature", sig)
+	req.Header.Set("X-Signature-Timestamp", strconv.FormatInt(ts, 10))
+
+	resp, _ := app.Test(req)
+	if resp.StatusCode != http.StatusUnauthorized {
+		t.Errorf("tampered body should return 401, got %d", resp.StatusCode)
+	}
+}
+
+func TestHMACMiddleware_GET_SkipsCheck(t *testing.T) {
+	signer := newTestHMACSigner(t)
+	app := newTestApp()
+	app.Get("/data", HMACMiddleware(signer), func(c *fiber.Ctx) error {
+		return c.JSON(fiber.Map{"ok": true})
+	})
+
+	req, _ := http.NewRequest(http.MethodGet, "/data", nil)
+	resp, _ := app.Test(req)
+	if resp.StatusCode != http.StatusOK {
+		t.Errorf("GET should skip HMAC check, got %d", resp.StatusCode)
+	}
+}
+
+// --- Challenge Middleware Tests ---
+
+type mockChallengeValidator struct {
+	validTokens map[string]string // token → userID
+}
+
+func (v *mockChallengeValidator) ValidateToken(_ context.Context, token, userID string) error {
+	if uid, ok := v.validTokens[token]; ok && uid == userID {
+		return nil
+	}
+	return apperror.ErrChallengeTokenInvalid
+}
+
+func TestRequireChallenge_ValidToken(t *testing.T) {
+	validator := &mockChallengeValidator{validTokens: map[string]string{"tok-abc": "user-1"}}
+	app := newTestApp()
+	app.Post("/transfer", func(c *fiber.Ctx) error {
+		c.Locals("user_id", "user-1")
+		return c.Next()
+	}, RequireChallenge(validator), func(c *fiber.Ctx) error {
+		return c.JSON(fiber.Map{"ok": true})
+	})
+
+	req, _ := http.NewRequest(http.MethodPost, "/transfer", nil)
+	req.Header.Set("X-Challenge-Token", "tok-abc")
+	resp, _ := app.Test(req)
+	if resp.StatusCode != http.StatusOK {
+		t.Errorf("valid challenge token should return 200, got %d", resp.StatusCode)
+	}
+}
+
+func TestRequireChallenge_MissingToken(t *testing.T) {
+	validator := &mockChallengeValidator{validTokens: map[string]string{}}
+	app := newTestApp()
+	app.Post("/transfer", func(c *fiber.Ctx) error {
+		c.Locals("user_id", "user-1")
+		return c.Next()
+	}, RequireChallenge(validator), func(c *fiber.Ctx) error {
+		return c.JSON(fiber.Map{"ok": true})
+	})
+
+	req, _ := http.NewRequest(http.MethodPost, "/transfer", nil)
+	resp, _ := app.Test(req)
+	if resp.StatusCode != http.StatusUnauthorized {
+		t.Errorf("missing token should return 401, got %d", resp.StatusCode)
+	}
+}
+
+func TestRequireChallenge_InvalidToken(t *testing.T) {
+	validator := &mockChallengeValidator{validTokens: map[string]string{"tok-abc": "user-1"}}
+	app := newTestApp()
+	app.Post("/transfer", func(c *fiber.Ctx) error {
+		c.Locals("user_id", "user-1")
+		return c.Next()
+	}, RequireChallenge(validator), func(c *fiber.Ctx) error {
+		return c.JSON(fiber.Map{"ok": true})
+	})
+
+	req, _ := http.NewRequest(http.MethodPost, "/transfer", nil)
+	req.Header.Set("X-Challenge-Token", "wrong-token")
+	resp, _ := app.Test(req)
+	if resp.StatusCode != http.StatusUnauthorized {
+		t.Errorf("invalid token should return 401, got %d", resp.StatusCode)
+	}
+}
+
+func TestRequireChallenge_NilValidator_Skips(t *testing.T) {
+	app := newTestApp()
+	app.Post("/transfer", RequireChallenge(nil), func(c *fiber.Ctx) error {
+		return c.JSON(fiber.Map{"ok": true})
+	})
+
+	req, _ := http.NewRequest(http.MethodPost, "/transfer", nil)
+	resp, _ := app.Test(req)
+	if resp.StatusCode != http.StatusOK {
+		t.Errorf("nil validator should skip, got %d", resp.StatusCode)
 	}
 }

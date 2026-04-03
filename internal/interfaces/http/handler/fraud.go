@@ -1,6 +1,8 @@
 package handler
 
 import (
+	"net/http"
+
 	fraudApp "github.com/BakhodiribnYashinibnMansur/XBank/internal/application/fraud"
 	"github.com/BakhodiribnYashinibnMansur/XBank/internal/domain/fraud"
 	"github.com/BakhodiribnYashinibnMansur/XBank/internal/interfaces/http/dto"
@@ -40,7 +42,7 @@ func (h *FraudHandler) ListFlagged(c *fiber.Ctx) error {
 		data = []dto.FraudCheckResponse{}
 	}
 
-	return c.JSON(dto.PaginatedResponse{
+	return apperror.Success(c, http.StatusOK, dto.PaginatedResponse{
 		Data:       data,
 		Pagination: dto.PaginationResponse{Page: pg.Page, Limit: pg.Limit, Total: total},
 	})
@@ -64,7 +66,7 @@ func (h *FraudHandler) GetByTransfer(c *fiber.Ctx) error {
 	if err != nil {
 		return err
 	}
-	return c.JSON(toFraudResponse(check))
+	return apperror.Success(c, http.StatusOK, toFraudResponse(check))
 }
 
 func toFraudResponse(ch *fraud.Check) dto.FraudCheckResponse {

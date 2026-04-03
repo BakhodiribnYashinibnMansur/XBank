@@ -4,13 +4,13 @@ import (
 	"context"
 	"time"
 
-	"github.com/BakhodiribnYashinibnMansur/XBank/pkg/apperror"
+	"github.com/BakhodiribnYashinibnMansur/XBank/internal/domain/shared"
 )
 
 var (
-	ErrSessionNotFound = apperror.ErrSessionNotFound
-	ErrSessionExpired  = apperror.ErrSessionExpired
-	ErrInvalidToken    = apperror.ErrInvalidToken
+	ErrSessionNotFound = shared.NewDomainError("SESSION_NOT_FOUND", "session not found")
+	ErrSessionExpired  = shared.NewDomainError("SESSION_EXPIRED", "session has expired")
+	ErrInvalidToken    = shared.NewDomainError("INVALID_TOKEN", "invalid token")
 )
 
 // Session - user session
@@ -28,7 +28,7 @@ type Session struct {
 // NewSession - create a new session
 func NewSession(userID, refreshTokenHash, userAgent, ipAddress string, expiresAt time.Time) (*Session, error) {
 	if userID == "" {
-		return nil, apperror.ErrMissingField.WithMessage("user_id cannot be empty")
+		return nil, shared.NewDomainError("MISSING_FIELD", "user_id cannot be empty")
 	}
 	if refreshTokenHash == "" {
 		return nil, ErrInvalidToken

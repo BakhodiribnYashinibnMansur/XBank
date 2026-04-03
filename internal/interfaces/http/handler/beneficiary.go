@@ -39,7 +39,7 @@ func (h *BeneficiaryHandler) Add(c *fiber.Ctx) error {
 		return err
 	}
 
-	return c.Status(http.StatusCreated).JSON(toBenResponse(b))
+	return apperror.Success(c, http.StatusCreated, toBenResponse(b))
 }
 
 // List godoc
@@ -68,7 +68,7 @@ func (h *BeneficiaryHandler) List(c *fiber.Ctx) error {
 		data = []dto.BeneficiaryResponse{}
 	}
 
-	return c.JSON(dto.PaginatedResponse{
+	return apperror.Success(c, http.StatusOK, dto.PaginatedResponse{
 		Data:       data,
 		Pagination: dto.PaginationResponse{Page: pg.Page, Limit: pg.Limit, Total: total},
 	})
@@ -90,7 +90,7 @@ func (h *BeneficiaryHandler) Delete(c *fiber.Ctx) error {
 	if err := h.service.Delete(c.Context(), id); err != nil {
 		return err
 	}
-	return c.JSON(fiber.Map{"message": "Beneficiary deleted"})
+	return apperror.Success(c, http.StatusOK, fiber.Map{"message": "Beneficiary deleted"})
 }
 
 func toBenResponse(b *beneficiary.Beneficiary) dto.BeneficiaryResponse {

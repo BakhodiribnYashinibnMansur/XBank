@@ -1,15 +1,11 @@
 package shared
 
-import (
-	"fmt"
-
-	"github.com/BakhodiribnYashinibnMansur/XBank/pkg/apperror"
-)
+import "fmt"
 
 var (
-	ErrNegativeAmount    = apperror.ErrInvalidAmount
-	ErrCurrencyMismatch  = apperror.ErrCurrencyMismatch
-	ErrInsufficientFunds = apperror.ErrInsufficientFunds
+	ErrNegativeAmount    = NewDomainError("INVALID_AMOUNT", "amount must be greater than zero")
+	ErrCurrencyMismatch  = NewDomainError("CURRENCY_MISMATCH", "currencies do not match")
+	ErrInsufficientFunds = NewDomainError("INSUFFICIENT_FUNDS", "insufficient balance")
 )
 
 // Currency - currency code (ISO 4217)

@@ -4,16 +4,16 @@ import (
 	"context"
 	"time"
 
-	"github.com/BakhodiribnYashinibnMansur/XBank/pkg/apperror"
+	"github.com/BakhodiribnYashinibnMansur/XBank/internal/domain/shared"
 )
 
 // Domain errors
 var (
-	ErrInvalidEmail    = apperror.ErrInvalidEmail
-	ErrInvalidPassword = apperror.ErrInvalidPassword
-	ErrInvalidName     = apperror.ErrInvalidName
-	ErrUserNotFound    = apperror.ErrUserNotFound
-	ErrEmailExists     = apperror.ErrEmailExists
+	ErrInvalidEmail    = shared.NewDomainError("INVALID_EMAIL", "invalid email format")
+	ErrInvalidPassword = shared.NewDomainError("INVALID_PASSWORD", "password must be at least 8 characters")
+	ErrInvalidName     = shared.NewDomainError("INVALID_NAME", "name cannot be empty")
+	ErrUserNotFound    = shared.NewDomainError("USER_NOT_FOUND", "user not found")
+	ErrEmailExists     = shared.NewDomainError("EMAIL_EXISTS", "this email is already registered")
 )
 
 // Role - user role for RBAC
@@ -33,6 +33,12 @@ type User struct {
 	FirstName string
 	LastName  string
 	Role      Role
+
+	// TOTP (2FA)
+	TOTPSecret     string     // base32-encoded shared secret
+	TOTPEnabled    bool       // whether 2FA is active
+	TOTPVerifiedAt *time.Time // when user first verified TOTP setup
+
 	CreatedAt time.Time
 	UpdatedAt time.Time
 }
@@ -70,5 +76,6 @@ type Repository interface {
 	GetByEmail(ctx context.Context, email string) (*User, error)
 	ExistsByEmail(ctx context.Context, email string) (bool, error)
 	UpdatePassword(ctx context.Context, userID, hashedPassword string) error
+	UpdateTOTP(ctx context.Context, userID, totpSecret string, enabled bool, verifiedAt *time.Time) error
 	Anonymize(ctx context.Context, userID string) error // GDPR right to erasure
 }

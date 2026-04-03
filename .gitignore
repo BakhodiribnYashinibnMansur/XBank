@@ -19,6 +19,10 @@
 !migrations/**
 !proto/
 !proto/**
+!deploy/
+!deploy/**
+!tests/
+!tests/**
 
 # Go module files
 !go.mod

@@ -4,17 +4,20 @@ import (
 	"context"
 	"time"
 
+	"github.com/BakhodiribnYashinibnMansur/XBank/internal/infrastructure/circuitbreaker"
 	"github.com/BakhodiribnYashinibnMansur/XBank/internal/infrastructure/metrics"
 	"github.com/segmentio/kafka-go"
 )
 
 // Producer - Kafka event publisher implementing shared.EventPublisher
 type Producer struct {
-	writer *kafka.Writer
+	writer  *kafka.Writer
+	breaker *circuitbreaker.Breaker
 }
 
 // NewProducer creates a Kafka producer for the given brokers.
 // Topic is set per-message, not per-writer.
+// Circuit breaker opens after 5 consecutive failures, resets after 30s.
 func NewProducer(brokers []string) *Producer {
 	w := &kafka.Writer{
 		Addr:         kafka.TCP(brokers...),
@@ -22,16 +25,24 @@ func NewProducer(brokers []string) *Producer {
 		RequiredAcks: kafka.RequireOne,
 		Async:        false, // synchronous for consistency
 	}
-	return &Producer{writer: w}
+	return &Producer{
+		writer:  w,
+		breaker: circuitbreaker.New("kafka-producer", 5, 30*time.Second),
+	}
 }
 
 // Publish sends a message to the specified Kafka topic.
+// Protected by a circuit breaker to prevent cascading failures
+// when Kafka is unreachable.
 func (p *Producer) Publish(ctx context.Context, topic string, key string, payload []byte) error {
 	start := time.Now()
-	err := p.writer.WriteMessages(ctx, kafka.Message{
-		Topic: topic,
-		Key:   []byte(key),
-		Value: payload,
+
+	err := p.breaker.Execute(func() error {
+		return p.writer.WriteMessages(ctx, kafka.Message{
+			Topic: topic,
+			Key:   []byte(key),
+			Value: payload,
+		})
 	})
 
 	status := "ok"

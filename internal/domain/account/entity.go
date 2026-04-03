@@ -7,14 +7,14 @@ import (
 	"time"
 
 	"github.com/BakhodiribnYashinibnMansur/XBank/internal/domain/shared"
-	"github.com/BakhodiribnYashinibnMansur/XBank/pkg/apperror"
 )
 
 var (
-	ErrAccountNotFound = apperror.ErrAccountNotFound
-	ErrAccountFrozen   = apperror.ErrAccountFrozen
-	ErrAccountClosed   = apperror.ErrAccountClosed
-	ErrBalanceNotZero  = apperror.ErrBalanceNotZero
+	ErrAccountNotFound = shared.NewDomainError("ACCOUNT_NOT_FOUND", "account not found")
+	ErrAccountFrozen   = shared.NewDomainError("ACCOUNT_FROZEN", "account is frozen")
+	ErrAccountClosed   = shared.NewDomainError("ACCOUNT_CLOSED", "account is closed")
+	ErrBalanceNotZero  = shared.NewDomainError("BALANCE_NOT_ZERO", "account balance must be 0 to close")
+	ErrMissingUserID   = shared.NewDomainError("MISSING_FIELD", "user_id cannot be empty")
 )
 
 type Status string
@@ -44,7 +44,7 @@ type Account struct {
 // NewAccount - create a new account (raises AccountOpened event)
 func NewAccount(userID string, currency shared.Currency) (*Account, error) {
 	if userID == "" {
-		return nil, apperror.ErrMissingField.WithMessage("user_id cannot be empty")
+		return nil, ErrMissingUserID
 	}
 
 	accountNumber, err := generateAccountNumber()

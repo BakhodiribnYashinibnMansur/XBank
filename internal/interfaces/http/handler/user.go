@@ -46,7 +46,7 @@ func (h *UserHandler) Register(c *fiber.Ctx) error {
 		return err
 	}
 
-	return c.Status(http.StatusCreated).JSON(dto.UserResponse{
+	return apperror.Success(c, http.StatusCreated, dto.UserResponse{
 		ID:        u.ID,
 		Email:     u.Email,
 		FirstName: u.FirstName,
@@ -75,7 +75,7 @@ func (h *UserHandler) GetByID(c *fiber.Ctx) error {
 		return err
 	}
 
-	return c.JSON(dto.UserResponse{
+	return apperror.Success(c, http.StatusOK, dto.UserResponse{
 		ID:        u.ID,
 		Email:     u.Email,
 		FirstName: u.FirstName,
@@ -107,7 +107,7 @@ func (h *UserHandler) ChangePassword(c *fiber.Ctx) error {
 		return err
 	}
 
-	return c.JSON(fiber.Map{"message": "Password changed"})
+	return apperror.Success(c, http.StatusOK, fiber.Map{"message": "Password changed"})
 }
 
 // ExportData godoc
@@ -123,7 +123,7 @@ func (h *UserHandler) ExportData(c *fiber.Ctx) error {
 	if err != nil {
 		return err
 	}
-	return c.JSON(dto.UserResponse{
+	return apperror.Success(c, http.StatusOK, dto.UserResponse{
 		ID: u.ID, Email: u.Email, FirstName: u.FirstName, LastName: u.LastName, CreatedAt: u.CreatedAt,
 	})
 }
@@ -140,5 +140,5 @@ func (h *UserHandler) DeleteAccount(c *fiber.Ctx) error {
 	if err := h.service.DeleteAccount(c.Context(), userID); err != nil {
 		return err
 	}
-	return c.JSON(fiber.Map{"message": "Account data anonymized"})
+	return apperror.Success(c, http.StatusOK, fiber.Map{"message": "Account data anonymized"})
 }

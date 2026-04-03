@@ -4,13 +4,13 @@ import (
 	"context"
 	"time"
 
-	"github.com/BakhodiribnYashinibnMansur/XBank/pkg/apperror"
+	"github.com/BakhodiribnYashinibnMansur/XBank/internal/domain/shared"
 )
 
 var (
-	ErrContactNotFound = apperror.ErrContactNotFound
-	ErrContactExists   = apperror.ErrContactExists
-	ErrContactSelf     = apperror.ErrContactSelf
+	ErrContactNotFound = shared.NewDomainError("CONTACT_NOT_FOUND", "contact not found")
+	ErrContactExists   = shared.NewDomainError("CONTACT_EXISTS", "contact already exists")
+	ErrContactSelf     = shared.NewDomainError("CONTACT_SELF", "cannot add yourself as a contact")
 )
 
 // Contact represents a user's saved contact (another XBank user).
@@ -26,10 +26,10 @@ type Contact struct {
 // NewContact creates a new Contact with validation.
 func NewContact(ownerID, contactID, customName string) (*Contact, error) {
 	if ownerID == "" {
-		return nil, apperror.ErrMissingField.WithMessage("owner_id is required")
+		return nil, shared.NewDomainError("MISSING_FIELD", "owner_id is required")
 	}
 	if contactID == "" {
-		return nil, apperror.ErrMissingField.WithMessage("contact_id is required")
+		return nil, shared.NewDomainError("MISSING_FIELD", "contact_id is required")
 	}
 	if ownerID == contactID {
 		return nil, ErrContactSelf

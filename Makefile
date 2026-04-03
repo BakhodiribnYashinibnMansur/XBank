@@ -1,4 +1,4 @@
-.PHONY: run build clean test docker-up docker-down migrate-up migrate-down migrate-status migrate-create
+.PHONY: run build clean test docker-up docker-down migrate-up migrate-down migrate-status migrate-create seed
 
 # Environment
 DATABASE_URL ?= postgres://postgres:postgres@localhost:5432/xbank?sslmode=disable
@@ -20,12 +20,24 @@ clean:
 test:
 	go test ./... -v
 
+# Benchmark testlar
+bench:
+	go test ./internal/... -bench=. -benchmem -run=^$$ -count=1
+
+# Load test (server ishlab turishi kerak)
+load-test:
+	go test ./tests/load/ -v -run Load -count=1
+
 # Docker orqali ishga tushirish
 docker-up:
 	docker-compose up --build
 
 docker-down:
 	docker-compose down
+
+# Demo ma'lumotlar bilan DB ni to'ldirish
+seed:
+	go run ./cmd/seed
 
 # ── Swagger ─────────────────────────────────────
 

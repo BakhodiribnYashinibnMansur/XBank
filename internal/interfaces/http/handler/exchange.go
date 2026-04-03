@@ -36,7 +36,7 @@ func (h *ExchangeHandler) GetRate(c *fiber.Ctx) error {
 	if err != nil {
 		return err
 	}
-	return c.JSON(toRateResponse(rate))
+	return apperror.Success(c, http.StatusOK, toRateResponse(rate))
 }
 
 // ListRates godoc
@@ -57,7 +57,7 @@ func (h *ExchangeHandler) ListRates(c *fiber.Ctx) error {
 	if resp == nil {
 		resp = []dto.RateResponse{}
 	}
-	return c.JSON(resp)
+	return apperror.Success(c, http.StatusOK, resp)
 }
 
 // Convert godoc
@@ -83,7 +83,7 @@ func (h *ExchangeHandler) Convert(c *fiber.Ctx) error {
 		return err
 	}
 
-	return c.JSON(dto.ConvertResponse{
+	return apperror.Success(c, http.StatusOK, dto.ConvertResponse{
 		From: req.From, To: req.To,
 		OriginalAmount: req.Amount, ConvertedAmount: converted,
 		RateUsed: rate.SellRate,
@@ -112,7 +112,7 @@ func (h *ExchangeHandler) UpsertRate(c *fiber.Ctx) error {
 	if err != nil {
 		return err
 	}
-	return c.Status(http.StatusOK).JSON(toRateResponse(rate))
+	return apperror.Success(c, http.StatusOK, toRateResponse(rate))
 }
 
 func toRateResponse(r *exchange.Rate) dto.RateResponse {

@@ -57,7 +57,7 @@ func (s *Service) Send(ctx context.Context, fromAccountID, toAccountID string, a
 		return nil, err
 	}
 
-	err = s.txManager.WithTx(ctx, func(txCtx context.Context) error {
+	err = s.txManager.WithSerializableTx(ctx, func(txCtx context.Context) error {
 		// Deadlock prevention: lock the smaller ID first
 		firstID, secondID := fromAccountID, toAccountID
 		if firstID > secondID {

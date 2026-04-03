@@ -1,0 +1,180 @@
+{
+  "annotations": { "list": [] },
+  "editable": true,
+  "graphTooltip": 1,
+  "id": null,
+  "links": [
+    { "title": "Overview", "url": "/d/xbank-overview", "type": "link" }
+  ],
+  "panels": [
+    {
+      "title": "Message Throughput by Topic",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 0 },
+      "targets": [
+        {
+          "expr": "sum(rate(xbank_kafka_messages_total{status=\"ok\"}[5m])) by (topic)",
+          "legendFormat": "{{topic}}"
+        }
+      ],
+      "fieldConfig": { "defaults": { "unit": "mps" } }
+    },
+    {
+      "title": "Publish Latency (p50 / p95 / p99)",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 0 },
+      "targets": [
+        {
+          "expr": "histogram_quantile(0.50, sum(rate(xbank_kafka_publish_duration_seconds_bucket[5m])) by (le))",
+          "legendFormat": "p50"
+        },
+        {
+          "expr": "histogram_quantile(0.95, sum(rate(xbank_kafka_publish_duration_seconds_bucket[5m])) by (le))",
+          "legendFormat": "p95"
+        },
+        {
+          "expr": "histogram_quantile(0.99, sum(rate(xbank_kafka_publish_duration_seconds_bucket[5m])) by (le))",
+          "legendFormat": "p99"
+        }
+      ],
+      "fieldConfig": { "defaults": { "unit": "s" } }
+    },
+    {
+      "title": "Message Status Breakdown",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 8 },
+      "targets": [
+        {
+          "expr": "sum(rate(xbank_kafka_messages_total[5m])) by (status)",
+          "legendFormat": "{{status}}"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "mps",
+          "custom": { "fillOpacity": 20 }
+        }
+      }
+    },
+    {
+      "title": "Consumer Processing Rate",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 8 },
+      "targets": [
+        {
+          "expr": "sum(rate(xbank_kafka_messages_total{status=\"consumed\"}[5m])) by (topic)",
+          "legendFormat": "{{topic}}"
+        }
+      ],
+      "fieldConfig": { "defaults": { "unit": "mps" } }
+    },
+    {
+      "title": "DLQ Messages",
+      "type": "stat",
+      "gridPos": { "h": 6, "w": 6, "x": 0, "y": 16 },
+      "targets": [
+        { "expr": "sum(xbank_kafka_messages_total{status=\"dlq\"}) or vector(0)" }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "thresholds": {
+            "steps": [
+              { "color": "green", "value": null },
+              { "color": "yellow", "value": 1 },
+              { "color": "red", "value": 10 }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "title": "DLQ Retry Results",
+      "type": "timeseries",
+      "gridPos": { "h": 6, "w": 6, "x": 6, "y": 16 },
+      "targets": [
+        {
+          "expr": "sum(rate(xbank_kafka_messages_total{status=\"dlq_retry_ok\"}[5m]))",
+          "legendFormat": "retry success"
+        },
+        {
+          "expr": "sum(rate(xbank_kafka_messages_total{status=\"dlq_retry_fail\"}[5m]))",
+          "legendFormat": "retry failed"
+        }
+      ],
+      "fieldConfig": { "defaults": { "unit": "mps" } }
+    },
+    {
+      "title": "Consumer Errors",
+      "type": "stat",
+      "gridPos": { "h": 6, "w": 6, "x": 12, "y": 16 },
+      "targets": [
+        { "expr": "sum(rate(xbank_kafka_messages_total{status=\"consume_error\"}[5m])) or vector(0)" }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "mps",
+          "thresholds": {
+            "steps": [
+              { "color": "green", "value": null },
+              { "color": "yellow", "value": 0.01 },
+              { "color": "red", "value": 0.1 }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "title": "Publish Latency by Topic (p95)",
+      "type": "timeseries",
+      "gridPos": { "h": 6, "w": 6, "x": 18, "y": 16 },
+      "targets": [
+        {
+          "expr": "histogram_quantile(0.95, sum(rate(xbank_kafka_publish_duration_seconds_bucket[5m])) by (le, topic))",
+          "legendFormat": "{{topic}}"
+        }
+      ],
+      "fieldConfig": { "defaults": { "unit": "s" } }
+    },
+    {
+      "title": "Total Messages Published",
+      "type": "stat",
+      "gridPos": { "h": 4, "w": 8, "x": 0, "y": 22 },
+      "targets": [
+        { "expr": "sum(xbank_kafka_messages_total{status=\"ok\"}) or vector(0)" }
+      ]
+    },
+    {
+      "title": "Total Messages Consumed",
+      "type": "stat",
+      "gridPos": { "h": 4, "w": 8, "x": 8, "y": 22 },
+      "targets": [
+        { "expr": "sum(xbank_kafka_messages_total{status=\"consumed\"}) or vector(0)" }
+      ]
+    },
+    {
+      "title": "Total DLQ Entries",
+      "type": "stat",
+      "gridPos": { "h": 4, "w": 8, "x": 16, "y": 22 },
+      "targets": [
+        { "expr": "sum(xbank_kafka_messages_total{status=~\"dlq.*\"}) or vector(0)" }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "thresholds": {
+            "steps": [
+              { "color": "green", "value": null },
+              { "color": "red", "value": 1 }
+            ]
+          }
+        }
+      }
+    }
+  ],
+  "refresh": "10s",
+  "schemaVersion": 39,
+  "tags": ["xbank", "kafka", "events"],
+  "templating": { "list": [] },
+  "time": { "from": "now-1h", "to": "now" },
+  "title": "XBank Kafka & Events",
+  "uid": "xbank-kafka"
+}

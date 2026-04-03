@@ -21,6 +21,14 @@ type Config struct {
 	Redis      RedisConfig
 	Encryption EncryptionConfig
 	Database   DatabaseConfig
+	Vault      VaultConfig
+}
+
+type VaultConfig struct {
+	Enabled   bool   // VAULT_ENABLED env
+	Address   string // VAULT_ADDR env
+	Token     string // VAULT_TOKEN env
+	MountPath string // VAULT_MOUNT_PATH env (default: "secret")
 }
 
 type JaegerConfig struct {
@@ -52,8 +60,9 @@ type CORSConfig struct {
 }
 
 type KafkaConfig struct {
-	Brokers []string          `yaml:"brokers"`
-	Topics  KafkaTopicsConfig `yaml:"topics"`
+	Brokers           []string          `yaml:"brokers"`
+	Topics            KafkaTopicsConfig `yaml:"topics"`
+	SchemaRegistryURL string            // from ENV: SCHEMA_REGISTRY_URL
 }
 
 type KafkaTopicsConfig struct {
@@ -130,12 +139,19 @@ func Load(path string) *Config {
 	}
 	cfg.MongoDB.URI = getEnv("MONGODB_URI", "mongodb://localhost:27017")
 	cfg.Redis.URL = getEnv("REDIS_URL", "redis://localhost:6379/0")
+	cfg.Kafka.SchemaRegistryURL = getEnv("SCHEMA_REGISTRY_URL", "")
 	cfg.Encryption.CardKey = getEnv("CARD_ENCRYPTION_KEY", "")
 	cfg.Encryption.HMACSecret = getEnv("HMAC_SECRET", "")
 
 	if endpoint := os.Getenv("JAEGER_ENDPOINT"); endpoint != "" {
 		cfg.Jaeger.Endpoint = endpoint
 	}
+
+	// Vault
+	cfg.Vault.Enabled = getEnv("VAULT_ENABLED", "") == "true"
+	cfg.Vault.Address = getEnv("VAULT_ADDR", "http://localhost:8200")
+	cfg.Vault.Token = getEnv("VAULT_TOKEN", "")
+	cfg.Vault.MountPath = getEnv("VAULT_MOUNT_PATH", "secret")
 
 	return cfg
 }

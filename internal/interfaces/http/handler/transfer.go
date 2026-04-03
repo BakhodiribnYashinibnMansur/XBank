@@ -51,7 +51,7 @@ func (h *TransferHandler) Send(c *fiber.Ctx) error {
 		return err
 	}
 
-	return c.Status(http.StatusCreated).JSON(toTransferResponse(tr))
+	return apperror.Success(c, http.StatusCreated, toTransferResponse(tr))
 }
 
 // GetByID godoc
@@ -74,7 +74,7 @@ func (h *TransferHandler) GetByID(c *fiber.Ctx) error {
 		return err
 	}
 
-	return c.JSON(toTransferResponse(tr))
+	return apperror.Success(c, http.StatusOK, toTransferResponse(tr))
 }
 
 // ListByAccount godoc
@@ -107,7 +107,7 @@ func (h *TransferHandler) ListByAccount(c *fiber.Ctx) error {
 		data = []dto.TransferResponse{}
 	}
 
-	return c.JSON(dto.PaginatedResponse{
+	return apperror.Success(c, http.StatusOK, dto.PaginatedResponse{
 		Data:       data,
 		Pagination: dto.PaginationResponse{Page: pg.Page, Limit: pg.Limit, Total: total},
 	})
@@ -144,7 +144,7 @@ func (h *TransferHandler) History(c *fiber.Ctx) error {
 		})
 	}
 
-	return c.JSON(resp)
+	return apperror.Success(c, http.StatusOK, resp)
 }
 
 func toTransferResponse(t *transfer.Transfer) dto.TransferResponse {
