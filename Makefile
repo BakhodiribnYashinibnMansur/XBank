@@ -6,11 +6,11 @@ MIGRATIONS_DIR = ./migrations
 
 # Lokal ishga tushirish
 run:
-	go run ./cmd/api
+	go run ./cmd/app
 
 # Binary build qilish
 build:
-	CGO_ENABLED=0 go build -o bin/xbank ./cmd/api
+	CGO_ENABLED=0 go build -o bin/xbank ./cmd/app
 
 # Build artefaktlarni tozalash
 clean:
@@ -37,13 +37,13 @@ docker-down:
 
 # Demo ma'lumotlar bilan DB ni to'ldirish
 seed:
-	go run ./cmd/seed
+	go run ./cmd/seeder
 
 # ── Swagger ─────────────────────────────────────
 
 # Generate swagger docs from annotations
 swagger:
-	swag init -g cmd/api/main.go -o docs/swagger
+	swag init -g cmd/app/main.go -o docs/swagger
 
 # ── JWT Keys ──────────────────────────────────────
 

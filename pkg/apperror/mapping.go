@@ -61,7 +61,7 @@ var domainCodeToAppError = map[string]*AppError{
 	"RATE_NOT_FOUND": ErrRateNotFound,
 }
 
-// domainCoder is satisfied by shared.DomainError without importing it.
+// domainCoder is satisfied by domain.DomainError without importing it.
 type domainCoder interface {
 	Code() string
 }

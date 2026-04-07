@@ -11,7 +11,7 @@ RUN go mod download
 COPY . .
 
 # Binary build
-RUN CGO_ENABLED=0 GOOS=linux go build -o xbank ./cmd/api
+RUN CGO_ENABLED=0 GOOS=linux go build -o xbank ./cmd/app
 
 # Run stage - kichik image
 FROM alpine:3.21
