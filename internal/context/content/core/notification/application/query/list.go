@@ -3,20 +3,20 @@ package query
 import (
 	"context"
 
-	"github.com/BakhodiribnYashinibnMansur/XBank/internal/context/content/core/notification/domain/repository"
-	"github.com/BakhodiribnYashinibnMansur/XBank/internal/kernel/domain"
+	"github.com/BakhodiribnYashinibnMansur/XBank/internal/context/content/core/notification/domain"
+	kernelDomain "github.com/BakhodiribnYashinibnMansur/XBank/internal/kernel/domain"
 )
 
 type ListResult struct {
-	Items      []*repository.NotificationView `json:"items"`
-	Pagination domain.Pagination              `json:"pagination"`
+	Items      []*domain.NotificationView `json:"items"`
+	Pagination kernelDomain.Pagination              `json:"pagination"`
 }
 
-type ListHandler struct{ repo repository.ReadRepository }
+type ListHandler struct{ repo domain.ReadRepository }
 
-func NewListHandler(r repository.ReadRepository) *ListHandler { return &ListHandler{repo: r} }
+func NewListHandler(r domain.ReadRepository) *ListHandler { return &ListHandler{repo: r} }
 
-func (h *ListHandler) Handle(ctx context.Context, filter repository.NotificationFilter) (*ListResult, error) {
+func (h *ListHandler) Handle(ctx context.Context, filter domain.NotificationFilter) (*ListResult, error) {
 	if filter.Limit <= 0 {
 		filter.Limit = 20
 	}
@@ -26,6 +26,6 @@ func (h *ListHandler) Handle(ctx context.Context, filter repository.Notification
 	}
 	return &ListResult{
 		Items:      items,
-		Pagination: domain.NewPagination(total, filter.Limit, filter.Offset),
+		Pagination: kernelDomain.NewPagination(total, filter.Limit, filter.Offset),
 	}, nil
 }

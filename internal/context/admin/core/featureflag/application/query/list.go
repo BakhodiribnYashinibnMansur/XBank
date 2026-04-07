@@ -3,26 +3,26 @@ package query
 import (
 	"context"
 
-	"github.com/BakhodiribnYashinibnMansur/XBank/internal/context/admin/core/featureflag/domain/repository"
-	"github.com/BakhodiribnYashinibnMansur/XBank/internal/kernel/domain"
+	"github.com/BakhodiribnYashinibnMansur/XBank/internal/context/admin/core/featureflag/domain"
+	kernelDomain "github.com/BakhodiribnYashinibnMansur/XBank/internal/kernel/domain"
 )
 
 // ListResult holds paginated feature flags.
 type ListResult struct {
-	Items      []*repository.FeatureFlagView `json:"items"`
-	Pagination domain.Pagination             `json:"pagination"`
+	Items      []*domain.FeatureFlagView `json:"items"`
+	Pagination kernelDomain.Pagination             `json:"pagination"`
 }
 
 // ListHandler returns paginated feature flags.
 type ListHandler struct {
-	readRepo repository.ReadRepository
+	readRepo domain.ReadRepository
 }
 
-func NewListHandler(readRepo repository.ReadRepository) *ListHandler {
+func NewListHandler(readRepo domain.ReadRepository) *ListHandler {
 	return &ListHandler{readRepo: readRepo}
 }
 
-func (h *ListHandler) Handle(ctx context.Context, filter repository.FeatureFlagFilter) (*ListResult, error) {
+func (h *ListHandler) Handle(ctx context.Context, filter domain.FeatureFlagFilter) (*ListResult, error) {
 	if filter.Limit <= 0 {
 		filter.Limit = 20
 	}
@@ -32,6 +32,6 @@ func (h *ListHandler) Handle(ctx context.Context, filter repository.FeatureFlagF
 	}
 	return &ListResult{
 		Items:      items,
-		Pagination: domain.NewPagination(total, filter.Limit, filter.Offset),
+		Pagination: kernelDomain.NewPagination(total, filter.Limit, filter.Offset),
 	}, nil
 }

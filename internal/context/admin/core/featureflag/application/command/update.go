@@ -5,26 +5,24 @@ import (
 	"fmt"
 
 	"github.com/BakhodiribnYashinibnMansur/XBank/internal/context/admin/core/featureflag/application"
-	"github.com/BakhodiribnYashinibnMansur/XBank/internal/context/admin/core/featureflag/domain/entity"
-	"github.com/BakhodiribnYashinibnMansur/XBank/internal/context/admin/core/featureflag/domain/event"
-	"github.com/BakhodiribnYashinibnMansur/XBank/internal/context/admin/core/featureflag/domain/repository"
+	"github.com/BakhodiribnYashinibnMansur/XBank/internal/context/admin/core/featureflag/domain"
 	appKernel "github.com/BakhodiribnYashinibnMansur/XBank/internal/kernel/application"
 )
 
 // UpdateHandler updates an existing feature flag.
 type UpdateHandler struct {
-	writeRepo repository.WriteRepository
+	writeRepo domain.WriteRepository
 	eventBus  appKernel.EventBus
 }
 
-func NewUpdateHandler(repo repository.WriteRepository, bus appKernel.EventBus) *UpdateHandler {
+func NewUpdateHandler(repo domain.WriteRepository, bus appKernel.EventBus) *UpdateHandler {
 	return &UpdateHandler{writeRepo: repo, eventBus: bus}
 }
 
 func (h *UpdateHandler) Handle(ctx context.Context, id string, req application.UpdateFlagRequest) error {
 	flag, err := h.writeRepo.FindByID(ctx, id)
 	if err != nil || flag == nil {
-		return entity.ErrFlagNotFound
+		return domain.ErrFlagNotFound
 	}
 
 	if err := flag.Update(req.Description, req.DefaultValue, req.Active, req.RolloutPct); err != nil {
@@ -35,6 +33,6 @@ func (h *UpdateHandler) Handle(ctx context.Context, id string, req application.U
 		return fmt.Errorf("update flag: save: %w", err)
 	}
 
-	h.eventBus.Publish(ctx, event.NewFlagUpdated(flag.ID, flag.Key))
+	h.eventBus.Publish(ctx, domain.NewFlagUpdated(flag.ID, flag.Key))
 	return nil
 }

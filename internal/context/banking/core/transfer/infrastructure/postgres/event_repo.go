@@ -9,6 +9,7 @@ import (
 	"github.com/BakhodiribnYashinibnMansur/XBank/internal/infrastructure/metrics"
 	"github.com/BakhodiribnYashinibnMansur/XBank/pkg/apperror"
 	"github.com/jackc/pgx/v5/pgxpool"
+	sharedPG "github.com/BakhodiribnYashinibnMansur/XBank/internal/infrastructure/postgres"
 )
 
 type TransferEventRepository struct {
@@ -22,7 +23,7 @@ func NewTransferEventRepository(pool *pgxpool.Pool) *TransferEventRepository {
 // Append - persist transfer events as EAV rows
 func (r *TransferEventRepository) Append(ctx context.Context, aggregateID string, expectedVersion int, events []transfer.Event) error {
 	start := time.Now()
-	db := ExtractDBTX(ctx, r.pool)
+	db := sharedPG.ExtractDBTX(ctx, r.pool)
 
 	for _, e := range events {
 		attrs := transferEventDataToAttrs(e.Data)
@@ -60,7 +61,7 @@ func (r *TransferEventRepository) LoadEventsFromVersion(ctx context.Context, agg
 
 func (r *TransferEventRepository) loadEvents(ctx context.Context, aggregateID string, fromVersion int) ([]transfer.Event, error) {
 	start := time.Now()
-	db := ExtractDBTX(ctx, r.pool)
+	db := sharedPG.ExtractDBTX(ctx, r.pool)
 
 	rows, err := db.Query(ctx,
 		`SELECT aggregate_id, event_type, version, attr_key, attr_value, occurred_at
@@ -136,7 +137,7 @@ func (r *TransferEventRepository) loadEvents(ctx context.Context, aggregateID st
 // SaveSnapshot - upsert into dedicated transfer_snapshots table
 func (r *TransferEventRepository) SaveSnapshot(ctx context.Context, snapshot transfer.Snapshot) error {
 	start := time.Now()
-	db := ExtractDBTX(ctx, r.pool)
+	db := sharedPG.ExtractDBTX(ctx, r.pool)
 
 	_, err := db.Exec(ctx,
 		`INSERT INTO transfer_snapshots (aggregate_id, version, from_account_id, to_account_id, amount, currency, status, description, failure_reason, created_at)
@@ -169,7 +170,7 @@ func (r *TransferEventRepository) SaveSnapshot(ctx context.Context, snapshot tra
 // LoadSnapshot - load latest snapshot from dedicated table
 func (r *TransferEventRepository) LoadSnapshot(ctx context.Context, aggregateID string) (*transfer.Snapshot, error) {
 	start := time.Now()
-	db := ExtractDBTX(ctx, r.pool)
+	db := sharedPG.ExtractDBTX(ctx, r.pool)
 
 	var version int
 	var fromAccID, toAccID, currency, status, description, failureReason string

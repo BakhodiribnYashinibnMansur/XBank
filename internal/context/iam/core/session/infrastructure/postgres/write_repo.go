@@ -7,6 +7,7 @@ import (
 	"github.com/BakhodiribnYashinibnMansur/XBank/internal/domain/session"
 	"github.com/BakhodiribnYashinibnMansur/XBank/internal/infrastructure/metrics"
 	"github.com/jackc/pgx/v5/pgxpool"
+	sharedPG "github.com/BakhodiribnYashinibnMansur/XBank/internal/infrastructure/postgres"
 )
 
 type SessionRepository struct {
@@ -19,7 +20,7 @@ func NewSessionRepository(pool *pgxpool.Pool) *SessionRepository {
 
 func (r *SessionRepository) Create(ctx context.Context, s *session.Session) error {
 	start := time.Now()
-	db := ExtractDBTX(ctx, r.pool)
+	db := sharedPG.ExtractDBTX(ctx, r.pool)
 	query := `
 		INSERT INTO sessions (user_id, refresh_token, user_agent, ip_address, expires_at, created_at)
 		VALUES ($1, $2, $3, $4, $5, $6)
@@ -34,7 +35,7 @@ func (r *SessionRepository) Create(ctx context.Context, s *session.Session) erro
 
 func (r *SessionRepository) GetByRefreshToken(ctx context.Context, refreshTokenHash string) (*session.Session, error) {
 	start := time.Now()
-	db := ExtractDBTX(ctx, r.pool)
+	db := sharedPG.ExtractDBTX(ctx, r.pool)
 	query := `
 		SELECT id, user_id, refresh_token, user_agent, ip_address, expires_at, created_at
 		FROM sessions WHERE refresh_token = $1`
@@ -52,7 +53,7 @@ func (r *SessionRepository) GetByRefreshToken(ctx context.Context, refreshTokenH
 
 func (r *SessionRepository) DeleteByID(ctx context.Context, id string) error {
 	start := time.Now()
-	db := ExtractDBTX(ctx, r.pool)
+	db := sharedPG.ExtractDBTX(ctx, r.pool)
 	_, err := db.Exec(ctx, `DELETE FROM sessions WHERE id = $1`, id)
 	metrics.ObserveQuery("SessionRepo.DeleteByID", start, err)
 	return err
@@ -60,7 +61,7 @@ func (r *SessionRepository) DeleteByID(ctx context.Context, id string) error {
 
 func (r *SessionRepository) DeleteAllByUserID(ctx context.Context, userID string) error {
 	start := time.Now()
-	db := ExtractDBTX(ctx, r.pool)
+	db := sharedPG.ExtractDBTX(ctx, r.pool)
 	_, err := db.Exec(ctx, `DELETE FROM sessions WHERE user_id = $1`, userID)
 	metrics.ObserveQuery("SessionRepo.DeleteAllByUserID", start, err)
 	return err

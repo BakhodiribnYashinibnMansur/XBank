@@ -3,26 +3,26 @@ package query
 import (
 	"context"
 
-	"github.com/BakhodiribnYashinibnMansur/XBank/internal/context/admin/supporting/sitesetting/domain/repository"
-	"github.com/BakhodiribnYashinibnMansur/XBank/internal/kernel/domain"
+	"github.com/BakhodiribnYashinibnMansur/XBank/internal/context/admin/supporting/sitesetting/domain"
+	kernelDomain "github.com/BakhodiribnYashinibnMansur/XBank/internal/kernel/domain"
 )
 
 // ListResult holds paginated site settings.
 type ListResult struct {
-	Items      []*repository.SiteSettingView `json:"items"`
-	Pagination domain.Pagination            `json:"pagination"`
+	Items      []*domain.SiteSettingView `json:"items"`
+	Pagination kernelDomain.Pagination            `json:"pagination"`
 }
 
 // ListHandler returns paginated site settings with optional filters.
 type ListHandler struct {
-	readRepo repository.ReadRepository
+	readRepo domain.ReadRepository
 }
 
-func NewListHandler(readRepo repository.ReadRepository) *ListHandler {
+func NewListHandler(readRepo domain.ReadRepository) *ListHandler {
 	return &ListHandler{readRepo: readRepo}
 }
 
-func (h *ListHandler) Handle(ctx context.Context, filter repository.SiteSettingFilter) (*ListResult, error) {
+func (h *ListHandler) Handle(ctx context.Context, filter domain.SiteSettingFilter) (*ListResult, error) {
 	if filter.Limit <= 0 {
 		filter.Limit = 20
 	}
@@ -34,6 +34,6 @@ func (h *ListHandler) Handle(ctx context.Context, filter repository.SiteSettingF
 
 	return &ListResult{
 		Items:      items,
-		Pagination: domain.NewPagination(total, filter.Limit, filter.Offset),
+		Pagination: kernelDomain.NewPagination(total, filter.Limit, filter.Offset),
 	}, nil
 }

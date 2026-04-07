@@ -7,7 +7,7 @@ import (
 	"github.com/BakhodiribnYashinibnMansur/XBank/internal/context/ops/supporting/errorcode/application"
 	"github.com/BakhodiribnYashinibnMansur/XBank/internal/context/ops/supporting/errorcode/application/command"
 	"github.com/BakhodiribnYashinibnMansur/XBank/internal/context/ops/supporting/errorcode/application/query"
-	"github.com/BakhodiribnYashinibnMansur/XBank/internal/context/ops/supporting/errorcode/domain/repository"
+	"github.com/BakhodiribnYashinibnMansur/XBank/internal/context/ops/supporting/errorcode/domain"
 	"github.com/BakhodiribnYashinibnMansur/XBank/pkg/apperror"
 	"github.com/gofiber/fiber/v2"
 )
@@ -57,7 +57,7 @@ func (h *Handler) Delete(c *fiber.Ctx) error {
 func (h *Handler) List(c *fiber.Ctx) error {
 	limit, _ := strconv.Atoi(c.Query("limit", "50"))
 	offset, _ := strconv.Atoi(c.Query("offset", "0"))
-	result, err := h.list.Handle(c.Context(), repository.ErrorCodeFilter{
+	result, err := h.list.Handle(c.Context(), domain.ErrorCodeFilter{
 		Code: c.Query("code"), Category: c.Query("category"), Severity: c.Query("severity"),
 		Limit: limit, Offset: offset,
 	})

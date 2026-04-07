@@ -8,6 +8,7 @@ import (
 	"github.com/BakhodiribnYashinibnMansur/XBank/internal/domain/shared"
 	"github.com/BakhodiribnYashinibnMansur/XBank/internal/infrastructure/metrics"
 	"github.com/jackc/pgx/v5/pgxpool"
+	sharedPG "github.com/BakhodiribnYashinibnMansur/XBank/internal/infrastructure/postgres"
 )
 
 type AccountRepository struct {
@@ -20,7 +21,7 @@ func NewAccountRepository(pool *pgxpool.Pool) *AccountRepository {
 
 func (r *AccountRepository) Create(ctx context.Context, a *account.Account) error {
 	start := time.Now()
-	db := ExtractDBTX(ctx, r.pool)
+	db := sharedPG.ExtractDBTX(ctx, r.pool)
 	query := `
 		INSERT INTO accounts (user_id, account_number, balance, currency, status, created_at, updated_at)
 		VALUES ($1, $2, $3, $4, $5, $6, $7)
@@ -36,7 +37,7 @@ func (r *AccountRepository) Create(ctx context.Context, a *account.Account) erro
 
 func (r *AccountRepository) GetByID(ctx context.Context, id string) (*account.Account, error) {
 	start := time.Now()
-	db := ExtractDBTX(ctx, r.pool)
+	db := sharedPG.ExtractDBTX(ctx, r.pool)
 	query := `
 		SELECT id, user_id, account_number, balance, currency, status, created_at, updated_at
 		FROM accounts WHERE id = $1`
@@ -58,7 +59,7 @@ func (r *AccountRepository) GetByID(ctx context.Context, id string) (*account.Ac
 
 func (r *AccountRepository) GetByIDForUpdate(ctx context.Context, id string) (*account.Account, error) {
 	start := time.Now()
-	db := ExtractDBTX(ctx, r.pool)
+	db := sharedPG.ExtractDBTX(ctx, r.pool)
 	query := `
 		SELECT id, user_id, account_number, balance, currency, status, created_at, updated_at
 		FROM accounts WHERE id = $1 FOR UPDATE`
@@ -80,7 +81,7 @@ func (r *AccountRepository) GetByIDForUpdate(ctx context.Context, id string) (*a
 
 func (r *AccountRepository) ListByUserID(ctx context.Context, userID string, limit, offset int) ([]*account.Account, error) {
 	start := time.Now()
-	db := ExtractDBTX(ctx, r.pool)
+	db := sharedPG.ExtractDBTX(ctx, r.pool)
 	query := `
 		SELECT id, user_id, account_number, balance, currency, status, created_at, updated_at
 		FROM accounts WHERE user_id = $1 ORDER BY created_at DESC
@@ -113,7 +114,7 @@ func (r *AccountRepository) ListByUserID(ctx context.Context, userID string, lim
 
 func (r *AccountRepository) CountByUserID(ctx context.Context, userID string) (int64, error) {
 	start := time.Now()
-	db := ExtractDBTX(ctx, r.pool)
+	db := sharedPG.ExtractDBTX(ctx, r.pool)
 	var count int64
 	err := db.QueryRow(ctx, `SELECT COUNT(*) FROM accounts WHERE user_id = $1`, userID).Scan(&count)
 	metrics.ObserveQuery("AccountRepo.CountByUserID", start, err)
@@ -122,7 +123,7 @@ func (r *AccountRepository) CountByUserID(ctx context.Context, userID string) (i
 
 func (r *AccountRepository) Update(ctx context.Context, a *account.Account) error {
 	start := time.Now()
-	db := ExtractDBTX(ctx, r.pool)
+	db := sharedPG.ExtractDBTX(ctx, r.pool)
 	query := `
 		UPDATE accounts SET balance = $1, status = $2, updated_at = $3
 		WHERE id = $4`

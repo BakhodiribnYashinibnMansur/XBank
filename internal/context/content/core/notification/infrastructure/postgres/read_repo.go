@@ -4,7 +4,7 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/BakhodiribnYashinibnMansur/XBank/internal/context/content/core/notification/domain/repository"
+	"github.com/BakhodiribnYashinibnMansur/XBank/internal/context/content/core/notification/domain"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
@@ -12,8 +12,8 @@ type ReadRepo struct{ pool *pgxpool.Pool }
 
 func NewReadRepo(pool *pgxpool.Pool) *ReadRepo { return &ReadRepo{pool: pool} }
 
-func (r *ReadRepo) FindByID(ctx context.Context, id string) (*repository.NotificationView, error) {
-	v := &repository.NotificationView{}
+func (r *ReadRepo) FindByID(ctx context.Context, id string) (*domain.NotificationView, error) {
+	v := &domain.NotificationView{}
 	var read bool
 	err := r.pool.QueryRow(ctx,
 		`SELECT id, user_id, title, message, type, (read_at IS NOT NULL) as read,
@@ -27,7 +27,7 @@ func (r *ReadRepo) FindByID(ctx context.Context, id string) (*repository.Notific
 	return v, nil
 }
 
-func (r *ReadRepo) List(ctx context.Context, filter repository.NotificationFilter) ([]*repository.NotificationView, int64, error) {
+func (r *ReadRepo) List(ctx context.Context, filter domain.NotificationFilter) ([]*domain.NotificationView, int64, error) {
 	countQ := `SELECT COUNT(*) FROM notifications WHERE user_id = $1`
 	args := []interface{}{filter.UserID}
 	idx := 2
@@ -70,9 +70,9 @@ func (r *ReadRepo) List(ctx context.Context, filter repository.NotificationFilte
 	}
 	defer rows.Close()
 
-	var items []*repository.NotificationView
+	var items []*domain.NotificationView
 	for rows.Next() {
-		v := &repository.NotificationView{}
+		v := &domain.NotificationView{}
 		if err := rows.Scan(&v.ID, &v.UserID, &v.Title, &v.Message, &v.Type, &v.Read, &v.CreatedAt); err != nil {
 			return nil, 0, err
 		}

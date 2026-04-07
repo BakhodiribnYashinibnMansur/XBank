@@ -3,23 +3,22 @@ package domain
 import (
 	"context"
 
-	"github.com/BakhodiribnYashinibnMansur/XBank/internal/context/content/generic/translation/domain/entity"
 )
 
 // WriteRepository defines write operations for Translation aggregate.
 type WriteRepository interface {
-	Save(ctx context.Context, t *entity.Translation) error
-	Update(ctx context.Context, t *entity.Translation) error
+	Save(ctx context.Context, t *Translation) error
+	Update(ctx context.Context, t *Translation) error
 	Delete(ctx context.Context, id string) error
-	FindByID(ctx context.Context, id string) (*entity.Translation, error)
-	FindByKeyAndLanguage(ctx context.Context, key string, lang entity.Language) (*entity.Translation, error)
+	FindByID(ctx context.Context, id string) (*Translation, error)
+	FindByKeyAndLanguage(ctx context.Context, key string, lang Language) (*Translation, error)
 }
 
 // TranslationView is the read projection.
 type TranslationView struct {
 	ID       string          `json:"id"`
 	Key      string          `json:"key"`
-	Language entity.Language `json:"language"`
+	Language Language `json:"language"`
 	Value    string          `json:"value"`
 	Group    string          `json:"group"`
 }

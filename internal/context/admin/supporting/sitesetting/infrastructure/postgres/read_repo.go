@@ -4,11 +4,11 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/BakhodiribnYashinibnMansur/XBank/internal/context/admin/supporting/sitesetting/domain/repository"
+	"github.com/BakhodiribnYashinibnMansur/XBank/internal/context/admin/supporting/sitesetting/domain"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
-// ReadRepo implements repository.ReadRepository for PostgreSQL.
+// ReadRepo implements domain.ReadRepository for PostgreSQL.
 type ReadRepo struct {
 	pool *pgxpool.Pool
 }
@@ -17,8 +17,8 @@ func NewReadRepo(pool *pgxpool.Pool) *ReadRepo {
 	return &ReadRepo{pool: pool}
 }
 
-func (r *ReadRepo) FindByID(ctx context.Context, id string) (*repository.SiteSettingView, error) {
-	v := &repository.SiteSettingView{}
+func (r *ReadRepo) FindByID(ctx context.Context, id string) (*domain.SiteSettingView, error) {
+	v := &domain.SiteSettingView{}
 	err := r.pool.QueryRow(ctx,
 		`SELECT id, key, value, setting_type, description,
 		        to_char(created_at, 'YYYY-MM-DD"T"HH24:MI:SS"Z"') as created_at,
@@ -31,7 +31,7 @@ func (r *ReadRepo) FindByID(ctx context.Context, id string) (*repository.SiteSet
 	return v, nil
 }
 
-func (r *ReadRepo) List(ctx context.Context, filter repository.SiteSettingFilter) ([]*repository.SiteSettingView, int64, error) {
+func (r *ReadRepo) List(ctx context.Context, filter domain.SiteSettingFilter) ([]*domain.SiteSettingView, int64, error) {
 	// Count
 	countQuery := `SELECT COUNT(*) FROM site_settings WHERE 1=1`
 	args := []interface{}{}
@@ -82,9 +82,9 @@ func (r *ReadRepo) List(ctx context.Context, filter repository.SiteSettingFilter
 	}
 	defer rows.Close()
 
-	var items []*repository.SiteSettingView
+	var items []*domain.SiteSettingView
 	for rows.Next() {
-		v := &repository.SiteSettingView{}
+		v := &domain.SiteSettingView{}
 		if err := rows.Scan(&v.ID, &v.Key, &v.Value, &v.SettingType, &v.Description, &v.CreatedAt, &v.UpdatedAt); err != nil {
 			return nil, 0, err
 		}

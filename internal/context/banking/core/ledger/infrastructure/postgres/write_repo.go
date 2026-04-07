@@ -8,6 +8,7 @@ import (
 	"github.com/BakhodiribnYashinibnMansur/XBank/internal/domain/ledger"
 	"github.com/BakhodiribnYashinibnMansur/XBank/internal/infrastructure/metrics"
 	"github.com/jackc/pgx/v5/pgxpool"
+	sharedPG "github.com/BakhodiribnYashinibnMansur/XBank/internal/infrastructure/postgres"
 )
 
 type LedgerRepository struct {
@@ -20,7 +21,7 @@ func NewLedgerRepository(pool *pgxpool.Pool) *LedgerRepository {
 
 func (r *LedgerRepository) CreatePair(ctx context.Context, debit, credit *ledger.Entry) error {
 	start := time.Now()
-	db := ExtractDBTX(ctx, r.pool)
+	db := sharedPG.ExtractDBTX(ctx, r.pool)
 
 	err := db.QueryRow(ctx,
 		`INSERT INTO ledger_entries (account_id, transfer_id, entry_type, amount, currency, created_at)
@@ -46,7 +47,7 @@ func (r *LedgerRepository) CreatePair(ctx context.Context, debit, credit *ledger
 
 func (r *LedgerRepository) ListByAccountID(ctx context.Context, accountID string, limit, offset int) ([]*ledger.Entry, error) {
 	start := time.Now()
-	db := ExtractDBTX(ctx, r.pool)
+	db := sharedPG.ExtractDBTX(ctx, r.pool)
 	rows, err := db.Query(ctx,
 		`SELECT id, account_id, transfer_id, entry_type, amount, currency, created_at
 		 FROM ledger_entries WHERE account_id = $1 ORDER BY created_at DESC LIMIT $2 OFFSET $3`,
@@ -73,7 +74,7 @@ func (r *LedgerRepository) ListByAccountID(ctx context.Context, accountID string
 
 func (r *LedgerRepository) CountByAccountID(ctx context.Context, accountID string) (int64, error) {
 	start := time.Now()
-	db := ExtractDBTX(ctx, r.pool)
+	db := sharedPG.ExtractDBTX(ctx, r.pool)
 	var count int64
 	err := db.QueryRow(ctx, `SELECT COUNT(*) FROM ledger_entries WHERE account_id = $1`, accountID).Scan(&count)
 	metrics.ObserveQuery("LedgerRepo.CountByAccountID", start, err)
@@ -82,7 +83,7 @@ func (r *LedgerRepository) CountByAccountID(ctx context.Context, accountID strin
 
 func (r *LedgerRepository) BalanceByAccountID(ctx context.Context, accountID string) (int64, error) {
 	start := time.Now()
-	db := ExtractDBTX(ctx, r.pool)
+	db := sharedPG.ExtractDBTX(ctx, r.pool)
 	var balance int64
 	err := db.QueryRow(ctx,
 		`SELECT COALESCE(

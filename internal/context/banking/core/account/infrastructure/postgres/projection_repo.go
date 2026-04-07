@@ -7,6 +7,7 @@ import (
 	"github.com/BakhodiribnYashinibnMansur/XBank/internal/domain/account"
 	"github.com/BakhodiribnYashinibnMansur/XBank/internal/infrastructure/metrics"
 	"github.com/jackc/pgx/v5/pgxpool"
+	sharedPG "github.com/BakhodiribnYashinibnMansur/XBank/internal/infrastructure/postgres"
 )
 
 // AccountProjectionRepository - manages the CQRS read projection.
@@ -24,7 +25,7 @@ func NewAccountProjectionRepository(pool *pgxpool.Pool) *AccountProjectionReposi
 // Called from the application service after saveAggregate.
 func (r *AccountProjectionRepository) Upsert(ctx context.Context, acc *account.Account, userEmail string) error {
 	start := time.Now()
-	db := ExtractDBTX(ctx, r.pool)
+	db := sharedPG.ExtractDBTX(ctx, r.pool)
 
 	_, err := db.Exec(ctx,
 		`INSERT INTO account_projections
@@ -47,7 +48,7 @@ func (r *AccountProjectionRepository) Upsert(ctx context.Context, acc *account.A
 // UpdateCounters - increment total_credited or total_debited.
 func (r *AccountProjectionRepository) AddCredit(ctx context.Context, accountID string, amount int64) error {
 	start := time.Now()
-	db := ExtractDBTX(ctx, r.pool)
+	db := sharedPG.ExtractDBTX(ctx, r.pool)
 
 	_, err := db.Exec(ctx,
 		`UPDATE account_projections SET total_credited = total_credited + $1 WHERE id = $2`,
@@ -59,7 +60,7 @@ func (r *AccountProjectionRepository) AddCredit(ctx context.Context, accountID s
 
 func (r *AccountProjectionRepository) AddDebit(ctx context.Context, accountID string, amount int64) error {
 	start := time.Now()
-	db := ExtractDBTX(ctx, r.pool)
+	db := sharedPG.ExtractDBTX(ctx, r.pool)
 
 	_, err := db.Exec(ctx,
 		`UPDATE account_projections SET total_debited = total_debited + $1 WHERE id = $2`,
@@ -88,7 +89,7 @@ type AccountSummary struct {
 // GetSummary - fetch enriched account summary from projection
 func (r *AccountProjectionRepository) GetSummary(ctx context.Context, accountID string) (*AccountSummary, error) {
 	start := time.Now()
-	db := ExtractDBTX(ctx, r.pool)
+	db := sharedPG.ExtractDBTX(ctx, r.pool)
 
 	s := &AccountSummary{}
 	err := db.QueryRow(ctx,
@@ -109,7 +110,7 @@ func (r *AccountProjectionRepository) GetSummary(ctx context.Context, accountID 
 // ListByUserID - paginated list from projection (no JOIN needed)
 func (r *AccountProjectionRepository) ListByUserID(ctx context.Context, userID string, limit, offset int) ([]*AccountSummary, int64, error) {
 	start := time.Now()
-	db := ExtractDBTX(ctx, r.pool)
+	db := sharedPG.ExtractDBTX(ctx, r.pool)
 
 	// Count
 	var total int64

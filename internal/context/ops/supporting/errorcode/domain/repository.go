@@ -3,15 +3,14 @@ package domain
 import (
 	"context"
 
-	"github.com/BakhodiribnYashinibnMansur/XBank/internal/context/ops/supporting/errorcode/domain/entity"
 )
 
 type WriteRepository interface {
-	Save(ctx context.Context, e *entity.ErrorCode) error
-	Update(ctx context.Context, e *entity.ErrorCode) error
+	Save(ctx context.Context, e *ErrorCode) error
+	Update(ctx context.Context, e *ErrorCode) error
 	Delete(ctx context.Context, id string) error
-	FindByID(ctx context.Context, id string) (*entity.ErrorCode, error)
-	FindByCode(ctx context.Context, code string) (*entity.ErrorCode, error)
+	FindByID(ctx context.Context, id string) (*ErrorCode, error)
+	FindByCode(ctx context.Context, code string) (*ErrorCode, error)
 }
 
 type ErrorCodeView struct {

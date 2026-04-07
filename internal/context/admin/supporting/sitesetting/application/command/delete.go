@@ -4,23 +4,22 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/BakhodiribnYashinibnMansur/XBank/internal/context/admin/supporting/sitesetting/domain/entity"
-	"github.com/BakhodiribnYashinibnMansur/XBank/internal/context/admin/supporting/sitesetting/domain/repository"
+	"github.com/BakhodiribnYashinibnMansur/XBank/internal/context/admin/supporting/sitesetting/domain"
 )
 
 // DeleteHandler deletes a site setting by ID.
 type DeleteHandler struct {
-	writeRepo repository.WriteRepository
+	writeRepo domain.WriteRepository
 }
 
-func NewDeleteHandler(writeRepo repository.WriteRepository) *DeleteHandler {
+func NewDeleteHandler(writeRepo domain.WriteRepository) *DeleteHandler {
 	return &DeleteHandler{writeRepo: writeRepo}
 }
 
 func (h *DeleteHandler) Handle(ctx context.Context, id string) error {
 	existing, err := h.writeRepo.FindByID(ctx, id)
 	if err != nil || existing == nil {
-		return entity.ErrSettingNotFound
+		return domain.ErrSettingNotFound
 	}
 	if err := h.writeRepo.Delete(ctx, id); err != nil {
 		return fmt.Errorf("delete setting: %w", err)

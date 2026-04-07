@@ -8,6 +8,7 @@ import (
 	"github.com/BakhodiribnYashinibnMansur/XBank/internal/domain/contact"
 	"github.com/BakhodiribnYashinibnMansur/XBank/internal/infrastructure/metrics"
 	"github.com/jackc/pgx/v5/pgxpool"
+	sharedPG "github.com/BakhodiribnYashinibnMansur/XBank/internal/infrastructure/postgres"
 )
 
 type ContactRepository struct {
@@ -25,7 +26,7 @@ func (r *ContactRepository) Add(ctx context.Context, c *contact.Contact) error {
 		VALUES ($1, $2, $3, FALSE, now())
 		ON CONFLICT (owner_id, contact_id) DO NOTHING
 	`
-	_, err := ExtractDBTX(ctx, r.pool).Exec(ctx, query, c.OwnerID, c.ContactID, c.CustomName)
+	_, err := sharedPG.ExtractDBTX(ctx, r.pool).Exec(ctx, query, c.OwnerID, c.ContactID, c.CustomName)
 	if err != nil {
 		metrics.ObserveQuery("ContactRepo.Add", start, err)
 		return fmt.Errorf("contact_repo: add: %w", err)
@@ -36,7 +37,7 @@ func (r *ContactRepository) Add(ctx context.Context, c *contact.Contact) error {
 
 func (r *ContactRepository) GetByID(ctx context.Context, id string) (*contact.Contact, error) {
 	start := time.Now()
-	db := ExtractDBTX(ctx, r.pool)
+	db := sharedPG.ExtractDBTX(ctx, r.pool)
 	c := &contact.Contact{}
 	err := db.QueryRow(ctx,
 		`SELECT id, owner_id, contact_id, custom_name, is_blocked, created_at
@@ -51,7 +52,7 @@ func (r *ContactRepository) GetByID(ctx context.Context, id string) (*contact.Co
 
 func (r *ContactRepository) ListByOwnerID(ctx context.Context, ownerID string, limit, offset int) ([]*contact.Contact, error) {
 	start := time.Now()
-	db := ExtractDBTX(ctx, r.pool)
+	db := sharedPG.ExtractDBTX(ctx, r.pool)
 	rows, err := db.Query(ctx,
 		`SELECT id, owner_id, contact_id, custom_name, is_blocked, created_at
 		 FROM user_contacts WHERE owner_id = $1 ORDER BY created_at DESC LIMIT $2 OFFSET $3`,
@@ -78,7 +79,7 @@ func (r *ContactRepository) ListByOwnerID(ctx context.Context, ownerID string, l
 
 func (r *ContactRepository) CountByOwnerID(ctx context.Context, ownerID string) (int64, error) {
 	start := time.Now()
-	db := ExtractDBTX(ctx, r.pool)
+	db := sharedPG.ExtractDBTX(ctx, r.pool)
 	var count int64
 	err := db.QueryRow(ctx, `SELECT COUNT(*) FROM user_contacts WHERE owner_id = $1`, ownerID).Scan(&count)
 	metrics.ObserveQuery("ContactRepo.CountByOwnerID", start, err)
@@ -87,7 +88,7 @@ func (r *ContactRepository) CountByOwnerID(ctx context.Context, ownerID string) 
 
 func (r *ContactRepository) Delete(ctx context.Context, ownerID, contactID string) error {
 	start := time.Now()
-	db := ExtractDBTX(ctx, r.pool)
+	db := sharedPG.ExtractDBTX(ctx, r.pool)
 	_, err := db.Exec(ctx, `DELETE FROM user_contacts WHERE owner_id = $1 AND contact_id = $2`, ownerID, contactID)
 	metrics.ObserveQuery("ContactRepo.Delete", start, err)
 	return err
@@ -95,7 +96,7 @@ func (r *ContactRepository) Delete(ctx context.Context, ownerID, contactID strin
 
 func (r *ContactRepository) IsContact(ctx context.Context, ownerID, contactID string) (bool, error) {
 	start := time.Now()
-	db := ExtractDBTX(ctx, r.pool)
+	db := sharedPG.ExtractDBTX(ctx, r.pool)
 	var exists bool
 	err := db.QueryRow(ctx,
 		`SELECT EXISTS(SELECT 1 FROM user_contacts WHERE owner_id = $1 AND contact_id = $2)`,

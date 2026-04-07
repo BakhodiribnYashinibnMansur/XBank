@@ -10,6 +10,7 @@ import (
 	"github.com/BakhodiribnYashinibnMansur/XBank/internal/infrastructure/metrics"
 	"github.com/BakhodiribnYashinibnMansur/XBank/pkg/apperror"
 	"github.com/jackc/pgx/v5/pgxpool"
+	sharedPG "github.com/BakhodiribnYashinibnMansur/XBank/internal/infrastructure/postgres"
 )
 
 type AccountEventRepository struct {
@@ -23,7 +24,7 @@ func NewAccountEventRepository(pool *pgxpool.Pool) *AccountEventRepository {
 // Append - EAV: each event field = separate row
 func (r *AccountEventRepository) Append(ctx context.Context, aggregateID string, expectedVersion int, events []account.Event) error {
 	start := time.Now()
-	db := ExtractDBTX(ctx, r.pool)
+	db := sharedPG.ExtractDBTX(ctx, r.pool)
 
 	for _, e := range events {
 		attrs := eventDataToAttrs(e.Data)
@@ -61,7 +62,7 @@ func (r *AccountEventRepository) LoadEventsFromVersion(ctx context.Context, aggr
 
 func (r *AccountEventRepository) loadEvents(ctx context.Context, aggregateID string, fromVersion int) ([]account.Event, error) {
 	start := time.Now()
-	db := ExtractDBTX(ctx, r.pool)
+	db := sharedPG.ExtractDBTX(ctx, r.pool)
 
 	rows, err := db.Query(ctx,
 		`SELECT aggregate_id, event_type, version, attr_key, attr_value, occurred_at
@@ -138,7 +139,7 @@ func (r *AccountEventRepository) loadEvents(ctx context.Context, aggregateID str
 // SaveSnapshot - upsert into dedicated account_snapshots table
 func (r *AccountEventRepository) SaveSnapshot(ctx context.Context, snapshot account.Snapshot) error {
 	start := time.Now()
-	db := ExtractDBTX(ctx, r.pool)
+	db := sharedPG.ExtractDBTX(ctx, r.pool)
 
 	_, err := db.Exec(ctx,
 		`INSERT INTO account_snapshots (aggregate_id, version, user_id, account_number, balance, currency, status, created_at)
@@ -168,7 +169,7 @@ func (r *AccountEventRepository) SaveSnapshot(ctx context.Context, snapshot acco
 // LoadSnapshot - load latest snapshot from dedicated table
 func (r *AccountEventRepository) LoadSnapshot(ctx context.Context, aggregateID string) (*account.Snapshot, error) {
 	start := time.Now()
-	db := ExtractDBTX(ctx, r.pool)
+	db := sharedPG.ExtractDBTX(ctx, r.pool)
 
 	var snap account.Snapshot
 	var userID, accountNumber, currency, status string

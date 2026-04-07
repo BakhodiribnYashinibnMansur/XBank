@@ -4,7 +4,7 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/BakhodiribnYashinibnMansur/XBank/internal/context/content/supporting/announcement/domain/entity"
+	"github.com/BakhodiribnYashinibnMansur/XBank/internal/context/content/supporting/announcement/domain"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
@@ -12,7 +12,7 @@ type WriteRepo struct{ pool *pgxpool.Pool }
 
 func NewWriteRepo(pool *pgxpool.Pool) *WriteRepo { return &WriteRepo{pool: pool} }
 
-func (r *WriteRepo) Save(ctx context.Context, a *entity.Announcement) error {
+func (r *WriteRepo) Save(ctx context.Context, a *domain.Announcement) error {
 	return r.pool.QueryRow(ctx,
 		`INSERT INTO announcements (title_uz, title_ru, title_en, body_uz, body_ru, body_en, priority, status, start_date, end_date, created_at, updated_at)
 		 VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12) RETURNING id`,
@@ -21,7 +21,7 @@ func (r *WriteRepo) Save(ctx context.Context, a *entity.Announcement) error {
 	).Scan(&a.ID)
 }
 
-func (r *WriteRepo) Update(ctx context.Context, a *entity.Announcement) error {
+func (r *WriteRepo) Update(ctx context.Context, a *domain.Announcement) error {
 	_, err := r.pool.Exec(ctx,
 		`UPDATE announcements SET title_uz=$1, title_ru=$2, title_en=$3, body_uz=$4, body_ru=$5, body_en=$6,
 		 priority=$7, status=$8, start_date=$9, end_date=$10, updated_at=$11 WHERE id=$12`,
@@ -35,8 +35,8 @@ func (r *WriteRepo) Delete(ctx context.Context, id string) error {
 	return err
 }
 
-func (r *WriteRepo) FindByID(ctx context.Context, id string) (*entity.Announcement, error) {
-	a := &entity.Announcement{}
+func (r *WriteRepo) FindByID(ctx context.Context, id string) (*domain.Announcement, error) {
+	a := &domain.Announcement{}
 	err := r.pool.QueryRow(ctx,
 		`SELECT id, title_uz, title_ru, title_en, body_uz, body_ru, body_en, priority, status, start_date, end_date, created_at, updated_at
 		 FROM announcements WHERE id = $1`, id,

@@ -8,6 +8,7 @@ import (
 	"github.com/BakhodiribnYashinibnMansur/XBank/internal/domain/user"
 	"github.com/BakhodiribnYashinibnMansur/XBank/internal/infrastructure/metrics"
 	"github.com/jackc/pgx/v5/pgxpool"
+	sharedPG "github.com/BakhodiribnYashinibnMansur/XBank/internal/infrastructure/postgres"
 )
 
 type UserRepository struct {
@@ -20,7 +21,7 @@ func NewUserRepository(pool *pgxpool.Pool) *UserRepository {
 
 func (r *UserRepository) Create(ctx context.Context, u *user.User) error {
 	start := time.Now()
-	db := ExtractDBTX(ctx, r.pool)
+	db := sharedPG.ExtractDBTX(ctx, r.pool)
 	query := `
 		INSERT INTO users (email, password, first_name, last_name, role, created_at, updated_at)
 		VALUES ($1, $2, $3, $4, $5, $6, $7)
@@ -38,7 +39,7 @@ func (r *UserRepository) Create(ctx context.Context, u *user.User) error {
 
 func (r *UserRepository) GetByID(ctx context.Context, id string) (*user.User, error) {
 	start := time.Now()
-	db := ExtractDBTX(ctx, r.pool)
+	db := sharedPG.ExtractDBTX(ctx, r.pool)
 	u := &user.User{}
 	err := db.QueryRow(ctx,
 		`SELECT id, email, password, first_name, last_name, role, totp_secret, totp_enabled, totp_verified_at, created_at, updated_at
@@ -53,7 +54,7 @@ func (r *UserRepository) GetByID(ctx context.Context, id string) (*user.User, er
 
 func (r *UserRepository) GetByEmail(ctx context.Context, email string) (*user.User, error) {
 	start := time.Now()
-	db := ExtractDBTX(ctx, r.pool)
+	db := sharedPG.ExtractDBTX(ctx, r.pool)
 	u := &user.User{}
 	err := db.QueryRow(ctx,
 		`SELECT id, email, password, first_name, last_name, role, totp_secret, totp_enabled, totp_verified_at, created_at, updated_at
@@ -68,7 +69,7 @@ func (r *UserRepository) GetByEmail(ctx context.Context, email string) (*user.Us
 
 func (r *UserRepository) ExistsByEmail(ctx context.Context, email string) (bool, error) {
 	start := time.Now()
-	db := ExtractDBTX(ctx, r.pool)
+	db := sharedPG.ExtractDBTX(ctx, r.pool)
 	var exists bool
 	err := db.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM users WHERE email = $1)`, email).Scan(&exists)
 	metrics.ObserveQuery("UserRepo.ExistsByEmail", start, err)
@@ -77,7 +78,7 @@ func (r *UserRepository) ExistsByEmail(ctx context.Context, email string) (bool,
 
 func (r *UserRepository) UpdatePassword(ctx context.Context, userID, hashedPassword string) error {
 	start := time.Now()
-	db := ExtractDBTX(ctx, r.pool)
+	db := sharedPG.ExtractDBTX(ctx, r.pool)
 	_, err := db.Exec(ctx, `UPDATE users SET password = $1, updated_at = NOW() WHERE id = $2`, hashedPassword, userID)
 	metrics.ObserveQuery("UserRepo.UpdatePassword", start, err)
 	return err
@@ -85,7 +86,7 @@ func (r *UserRepository) UpdatePassword(ctx context.Context, userID, hashedPassw
 
 func (r *UserRepository) UpdateTOTP(ctx context.Context, userID, totpSecret string, enabled bool, verifiedAt *time.Time) error {
 	start := time.Now()
-	db := ExtractDBTX(ctx, r.pool)
+	db := sharedPG.ExtractDBTX(ctx, r.pool)
 	_, err := db.Exec(ctx,
 		`UPDATE users SET totp_secret = $1, totp_enabled = $2, totp_verified_at = $3, updated_at = NOW() WHERE id = $4`,
 		totpSecret, enabled, verifiedAt, userID,
@@ -96,7 +97,7 @@ func (r *UserRepository) UpdateTOTP(ctx context.Context, userID, totpSecret stri
 
 func (r *UserRepository) Anonymize(ctx context.Context, userID string) error {
 	start := time.Now()
-	db := ExtractDBTX(ctx, r.pool)
+	db := sharedPG.ExtractDBTX(ctx, r.pool)
 	_, err := db.Exec(ctx,
 		`UPDATE users SET email = 'deleted_' || id, password = '', first_name = '[DELETED]', last_name = '[DELETED]', updated_at = NOW() WHERE id = $1`,
 		userID,

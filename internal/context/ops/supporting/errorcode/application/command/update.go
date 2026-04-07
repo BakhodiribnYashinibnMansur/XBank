@@ -5,18 +5,17 @@ import (
 	"fmt"
 
 	"github.com/BakhodiribnYashinibnMansur/XBank/internal/context/ops/supporting/errorcode/application"
-	"github.com/BakhodiribnYashinibnMansur/XBank/internal/context/ops/supporting/errorcode/domain/entity"
-	"github.com/BakhodiribnYashinibnMansur/XBank/internal/context/ops/supporting/errorcode/domain/repository"
+	"github.com/BakhodiribnYashinibnMansur/XBank/internal/context/ops/supporting/errorcode/domain"
 )
 
-type UpdateHandler struct{ repo repository.WriteRepository }
+type UpdateHandler struct{ repo domain.WriteRepository }
 
-func NewUpdateHandler(r repository.WriteRepository) *UpdateHandler { return &UpdateHandler{repo: r} }
+func NewUpdateHandler(r domain.WriteRepository) *UpdateHandler { return &UpdateHandler{repo: r} }
 
 func (h *UpdateHandler) Handle(ctx context.Context, id string, req application.UpdateErrorCodeRequest) error {
 	e, err := h.repo.FindByID(ctx, id)
 	if err != nil || e == nil {
-		return entity.ErrCodeNotFound
+		return domain.ErrCodeNotFound
 	}
 	e.Update(req.MessageEn, req.MessageUz, req.MessageRu, req.Suggestion, req.HTTPStatus, req.Retryable)
 	if err := h.repo.Update(ctx, e); err != nil {

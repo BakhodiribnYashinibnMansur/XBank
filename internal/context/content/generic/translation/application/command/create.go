@@ -5,26 +5,25 @@ import (
 	"fmt"
 
 	"github.com/BakhodiribnYashinibnMansur/XBank/internal/context/content/generic/translation/application"
-	"github.com/BakhodiribnYashinibnMansur/XBank/internal/context/content/generic/translation/domain/entity"
-	"github.com/BakhodiribnYashinibnMansur/XBank/internal/context/content/generic/translation/domain/repository"
+	"github.com/BakhodiribnYashinibnMansur/XBank/internal/context/content/generic/translation/domain"
 )
 
 type CreateHandler struct {
-	repo repository.WriteRepository
+	repo domain.WriteRepository
 }
 
-func NewCreateHandler(repo repository.WriteRepository) *CreateHandler {
+func NewCreateHandler(repo domain.WriteRepository) *CreateHandler {
 	return &CreateHandler{repo: repo}
 }
 
 func (h *CreateHandler) Handle(ctx context.Context, req application.CreateTranslationRequest) (string, error) {
-	lang := entity.Language(req.Language)
+	lang := domain.Language(req.Language)
 
 	if existing, _ := h.repo.FindByKeyAndLanguage(ctx, req.Key, lang); existing != nil {
-		return "", entity.ErrKeyLanguageExists
+		return "", domain.ErrKeyLanguageExists
 	}
 
-	t, err := entity.NewTranslation(req.Key, lang, req.Value, req.Group)
+	t, err := domain.NewTranslation(req.Key, lang, req.Value, req.Group)
 	if err != nil {
 		return "", fmt.Errorf("create translation: %w", err)
 	}

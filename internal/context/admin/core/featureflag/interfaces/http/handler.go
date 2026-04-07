@@ -7,8 +7,7 @@ import (
 	"github.com/BakhodiribnYashinibnMansur/XBank/internal/context/admin/core/featureflag/application"
 	"github.com/BakhodiribnYashinibnMansur/XBank/internal/context/admin/core/featureflag/application/command"
 	"github.com/BakhodiribnYashinibnMansur/XBank/internal/context/admin/core/featureflag/application/query"
-	"github.com/BakhodiribnYashinibnMansur/XBank/internal/context/admin/core/featureflag/domain/entity"
-	"github.com/BakhodiribnYashinibnMansur/XBank/internal/context/admin/core/featureflag/domain/repository"
+	"github.com/BakhodiribnYashinibnMansur/XBank/internal/context/admin/core/featureflag/domain"
 	"github.com/BakhodiribnYashinibnMansur/XBank/pkg/apperror"
 	"github.com/gofiber/fiber/v2"
 )
@@ -43,7 +42,7 @@ func (h *Handler) Create(c *fiber.Ctx) error {
 	id, err := h.create.Handle(c.Context(), application.CreateFlagRequest{
 		Key:          req.Key,
 		Description:  req.Description,
-		FlagType:     entity.FlagType(req.FlagType),
+		FlagType:     domain.FlagType(req.FlagType),
 		DefaultValue: req.DefaultValue,
 	})
 	if err != nil {
@@ -100,7 +99,7 @@ func (h *Handler) List(c *fiber.Ctx) error {
 		active = &v
 	}
 
-	result, err := h.list.Handle(c.Context(), repository.FeatureFlagFilter{
+	result, err := h.list.Handle(c.Context(), domain.FeatureFlagFilter{
 		Key:    c.Query("key"),
 		Active: active,
 		Limit:  limit,

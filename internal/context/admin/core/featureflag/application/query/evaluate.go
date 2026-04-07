@@ -5,17 +5,16 @@ import (
 	"sort"
 
 	"github.com/BakhodiribnYashinibnMansur/XBank/internal/context/admin/core/featureflag/application"
-	"github.com/BakhodiribnYashinibnMansur/XBank/internal/context/admin/core/featureflag/domain/entity"
-	"github.com/BakhodiribnYashinibnMansur/XBank/internal/context/admin/core/featureflag/domain/repository"
+	"github.com/BakhodiribnYashinibnMansur/XBank/internal/context/admin/core/featureflag/domain"
 )
 
 // EvaluateHandler evaluates a feature flag for a specific user/context.
 // Priority: 1) Rule groups (sorted by priority) 2) Rollout % 3) Default value
 type EvaluateHandler struct {
-	writeRepo repository.WriteRepository
+	writeRepo domain.WriteRepository
 }
 
-func NewEvaluateHandler(writeRepo repository.WriteRepository) *EvaluateHandler {
+func NewEvaluateHandler(writeRepo domain.WriteRepository) *EvaluateHandler {
 	return &EvaluateHandler{writeRepo: writeRepo}
 }
 
@@ -26,7 +25,7 @@ func (h *EvaluateHandler) Handle(ctx context.Context, req application.EvaluateRe
 			Key:     req.Key,
 			Value:   "",
 			Enabled: false,
-		}, entity.ErrFlagNotFound
+		}, domain.ErrFlagNotFound
 	}
 
 	// Inactive → always default
@@ -40,7 +39,7 @@ func (h *EvaluateHandler) Handle(ctx context.Context, req application.EvaluateRe
 
 	// Check rule groups (sorted by priority, lower = first)
 	if len(flag.RuleGroups) > 0 {
-		sorted := make([]entity.RuleGroup, len(flag.RuleGroups))
+		sorted := make([]domain.RuleGroup, len(flag.RuleGroups))
 		copy(sorted, flag.RuleGroups)
 		sort.Slice(sorted, func(i, j int) bool {
 			return sorted[i].Priority < sorted[j].Priority

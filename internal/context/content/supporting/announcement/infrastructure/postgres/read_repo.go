@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/BakhodiribnYashinibnMansur/XBank/internal/context/content/supporting/announcement/domain/repository"
+	"github.com/BakhodiribnYashinibnMansur/XBank/internal/context/content/supporting/announcement/domain"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
@@ -13,8 +13,8 @@ type ReadRepo struct{ pool *pgxpool.Pool }
 
 func NewReadRepo(pool *pgxpool.Pool) *ReadRepo { return &ReadRepo{pool: pool} }
 
-func (r *ReadRepo) FindByID(ctx context.Context, id string) (*repository.AnnouncementView, error) {
-	v := &repository.AnnouncementView{}
+func (r *ReadRepo) FindByID(ctx context.Context, id string) (*domain.AnnouncementView, error) {
+	v := &domain.AnnouncementView{}
 	err := r.pool.QueryRow(ctx,
 		`SELECT id, title_uz, title_ru, title_en, body_uz, body_ru, body_en, priority, status, start_date, end_date,
 		        to_char(created_at, 'YYYY-MM-DD"T"HH24:MI:SS"Z"')
@@ -27,7 +27,7 @@ func (r *ReadRepo) FindByID(ctx context.Context, id string) (*repository.Announc
 	return v, nil
 }
 
-func (r *ReadRepo) List(ctx context.Context, filter repository.AnnouncementFilter) ([]*repository.AnnouncementView, int64, error) {
+func (r *ReadRepo) List(ctx context.Context, filter domain.AnnouncementFilter) ([]*domain.AnnouncementView, int64, error) {
 	countQ := `SELECT COUNT(*) FROM announcements WHERE 1=1`
 	args := []interface{}{}
 	idx := 1
@@ -64,9 +64,9 @@ func (r *ReadRepo) List(ctx context.Context, filter repository.AnnouncementFilte
 	}
 	defer rows.Close()
 
-	var items []*repository.AnnouncementView
+	var items []*domain.AnnouncementView
 	for rows.Next() {
-		v := &repository.AnnouncementView{}
+		v := &domain.AnnouncementView{}
 		if err := rows.Scan(&v.ID, &v.TitleUz, &v.TitleRu, &v.TitleEn, &v.BodyUz, &v.BodyRu, &v.BodyEn,
 			&v.Priority, &v.Status, &v.StartDate, &v.EndDate, &v.CreatedAt); err != nil {
 			return nil, 0, err
@@ -76,7 +76,7 @@ func (r *ReadRepo) List(ctx context.Context, filter repository.AnnouncementFilte
 	return items, total, nil
 }
 
-func (r *ReadRepo) ListActive(ctx context.Context, now time.Time) ([]*repository.AnnouncementView, error) {
+func (r *ReadRepo) ListActive(ctx context.Context, now time.Time) ([]*domain.AnnouncementView, error) {
 	rows, err := r.pool.Query(ctx,
 		`SELECT id, title_uz, title_ru, title_en, body_uz, body_ru, body_en, priority, status, start_date, end_date,
 		        to_char(created_at, 'YYYY-MM-DD"T"HH24:MI:SS"Z"')
@@ -90,9 +90,9 @@ func (r *ReadRepo) ListActive(ctx context.Context, now time.Time) ([]*repository
 	}
 	defer rows.Close()
 
-	var items []*repository.AnnouncementView
+	var items []*domain.AnnouncementView
 	for rows.Next() {
-		v := &repository.AnnouncementView{}
+		v := &domain.AnnouncementView{}
 		if err := rows.Scan(&v.ID, &v.TitleUz, &v.TitleRu, &v.TitleEn, &v.BodyUz, &v.BodyRu, &v.BodyEn,
 			&v.Priority, &v.Status, &v.StartDate, &v.EndDate, &v.CreatedAt); err != nil {
 			return nil, err

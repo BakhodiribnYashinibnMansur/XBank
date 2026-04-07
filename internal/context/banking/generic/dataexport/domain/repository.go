@@ -3,13 +3,12 @@ package domain
 import (
 	"context"
 
-	"github.com/BakhodiribnYashinibnMansur/XBank/internal/context/banking/generic/dataexport/domain/entity"
 )
 
 type WriteRepository interface {
-	Save(ctx context.Context, e *entity.DataExport) error
-	Update(ctx context.Context, e *entity.DataExport) error
-	FindByID(ctx context.Context, id string) (*entity.DataExport, error)
+	Save(ctx context.Context, e *DataExport) error
+	Update(ctx context.Context, e *DataExport) error
+	FindByID(ctx context.Context, id string) (*DataExport, error)
 }
 
 type DataExportView struct {

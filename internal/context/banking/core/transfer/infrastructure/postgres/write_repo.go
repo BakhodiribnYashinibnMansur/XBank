@@ -8,6 +8,7 @@ import (
 	"github.com/BakhodiribnYashinibnMansur/XBank/internal/domain/transfer"
 	"github.com/BakhodiribnYashinibnMansur/XBank/internal/infrastructure/metrics"
 	"github.com/jackc/pgx/v5/pgxpool"
+	sharedPG "github.com/BakhodiribnYashinibnMansur/XBank/internal/infrastructure/postgres"
 )
 
 type TransferRepository struct {
@@ -20,7 +21,7 @@ func NewTransferRepository(pool *pgxpool.Pool) *TransferRepository {
 
 func (r *TransferRepository) Create(ctx context.Context, t *transfer.Transfer) error {
 	start := time.Now()
-	db := ExtractDBTX(ctx, r.pool)
+	db := sharedPG.ExtractDBTX(ctx, r.pool)
 	query := `
 		INSERT INTO transfers (id, from_account_id, to_account_id, amount, currency, status, description, failure_reason, created_at)
 		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)`
@@ -35,7 +36,7 @@ func (r *TransferRepository) Create(ctx context.Context, t *transfer.Transfer) e
 
 func (r *TransferRepository) GetByID(ctx context.Context, id string) (*transfer.Transfer, error) {
 	start := time.Now()
-	db := ExtractDBTX(ctx, r.pool)
+	db := sharedPG.ExtractDBTX(ctx, r.pool)
 	query := `
 		SELECT id, from_account_id, to_account_id, amount, currency,
 		       status, description, failure_reason, created_at
@@ -58,7 +59,7 @@ func (r *TransferRepository) GetByID(ctx context.Context, id string) (*transfer.
 
 func (r *TransferRepository) ListByAccountID(ctx context.Context, accountID string, limit, offset int) ([]*transfer.Transfer, error) {
 	start := time.Now()
-	db := ExtractDBTX(ctx, r.pool)
+	db := sharedPG.ExtractDBTX(ctx, r.pool)
 	query := `
 		SELECT id, from_account_id, to_account_id, amount, currency,
 		       status, description, failure_reason, created_at
@@ -94,7 +95,7 @@ func (r *TransferRepository) ListByAccountID(ctx context.Context, accountID stri
 
 func (r *TransferRepository) Update(ctx context.Context, t *transfer.Transfer) error {
 	start := time.Now()
-	db := ExtractDBTX(ctx, r.pool)
+	db := sharedPG.ExtractDBTX(ctx, r.pool)
 	_, err := db.Exec(ctx,
 		`UPDATE transfers SET status = $1, failure_reason = $2 WHERE id = $3`,
 		t.Status, t.FailureReason, t.ID,
@@ -105,7 +106,7 @@ func (r *TransferRepository) Update(ctx context.Context, t *transfer.Transfer) e
 
 func (r *TransferRepository) CountByAccountID(ctx context.Context, accountID string) (int64, error) {
 	start := time.Now()
-	db := ExtractDBTX(ctx, r.pool)
+	db := sharedPG.ExtractDBTX(ctx, r.pool)
 	var count int64
 	err := db.QueryRow(ctx,
 		`SELECT COUNT(*) FROM transfers WHERE from_account_id = $1 OR to_account_id = $1`,

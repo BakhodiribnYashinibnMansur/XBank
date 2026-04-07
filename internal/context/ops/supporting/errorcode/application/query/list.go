@@ -4,21 +4,21 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/BakhodiribnYashinibnMansur/XBank/internal/context/ops/supporting/errorcode/domain/repository"
-	"github.com/BakhodiribnYashinibnMansur/XBank/internal/kernel/domain"
+	"github.com/BakhodiribnYashinibnMansur/XBank/internal/context/ops/supporting/errorcode/domain"
+	kernelDomain "github.com/BakhodiribnYashinibnMansur/XBank/internal/kernel/domain"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
 type ListResult struct {
-	Items      []*repository.ErrorCodeView `json:"items"`
-	Pagination domain.Pagination           `json:"pagination"`
+	Items      []*domain.ErrorCodeView `json:"items"`
+	Pagination kernelDomain.Pagination           `json:"pagination"`
 }
 
 type ListHandler struct{ pool *pgxpool.Pool }
 
 func NewListHandler(pool *pgxpool.Pool) *ListHandler { return &ListHandler{pool: pool} }
 
-func (h *ListHandler) Handle(ctx context.Context, filter repository.ErrorCodeFilter) (*ListResult, error) {
+func (h *ListHandler) Handle(ctx context.Context, filter domain.ErrorCodeFilter) (*ListResult, error) {
 	if filter.Limit <= 0 {
 		filter.Limit = 50
 	}
@@ -74,14 +74,14 @@ func (h *ListHandler) Handle(ctx context.Context, filter repository.ErrorCodeFil
 	}
 	defer rows.Close()
 
-	var items []*repository.ErrorCodeView
+	var items []*domain.ErrorCodeView
 	for rows.Next() {
-		v := &repository.ErrorCodeView{}
+		v := &domain.ErrorCodeView{}
 		if err := rows.Scan(&v.ID, &v.Code, &v.MessageEn, &v.MessageUz, &v.MessageRu,
 			&v.Category, &v.Severity, &v.HTTPStatus, &v.Retryable, &v.Suggestion); err != nil {
 			return nil, err
 		}
 		items = append(items, v)
 	}
-	return &ListResult{Items: items, Pagination: domain.NewPagination(total, filter.Limit, filter.Offset)}, nil
+	return &ListResult{Items: items, Pagination: kernelDomain.NewPagination(total, filter.Limit, filter.Offset)}, nil
 }

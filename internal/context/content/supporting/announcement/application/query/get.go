@@ -3,13 +3,13 @@ package query
 import (
 	"context"
 
-	"github.com/BakhodiribnYashinibnMansur/XBank/internal/context/content/supporting/announcement/domain/repository"
+	"github.com/BakhodiribnYashinibnMansur/XBank/internal/context/content/supporting/announcement/domain"
 )
 
-type GetHandler struct{ repo repository.ReadRepository }
+type GetHandler struct{ repo domain.ReadRepository }
 
-func NewGetHandler(r repository.ReadRepository) *GetHandler { return &GetHandler{repo: r} }
+func NewGetHandler(r domain.ReadRepository) *GetHandler { return &GetHandler{repo: r} }
 
-func (h *GetHandler) Handle(ctx context.Context, id string) (*repository.AnnouncementView, error) {
+func (h *GetHandler) Handle(ctx context.Context, id string) (*domain.AnnouncementView, error) {
 	return h.repo.FindByID(ctx, id)
 }

@@ -4,14 +4,13 @@ import (
 	"context"
 	"time"
 
-	"github.com/BakhodiribnYashinibnMansur/XBank/internal/context/content/supporting/announcement/domain/entity"
 )
 
 type WriteRepository interface {
-	Save(ctx context.Context, a *entity.Announcement) error
-	Update(ctx context.Context, a *entity.Announcement) error
+	Save(ctx context.Context, a *Announcement) error
+	Update(ctx context.Context, a *Announcement) error
 	Delete(ctx context.Context, id string) error
-	FindByID(ctx context.Context, id string) (*entity.Announcement, error)
+	FindByID(ctx context.Context, id string) (*Announcement, error)
 }
 
 type AnnouncementView struct {

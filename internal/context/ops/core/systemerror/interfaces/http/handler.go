@@ -6,7 +6,7 @@ import (
 
 	"github.com/BakhodiribnYashinibnMansur/XBank/internal/context/ops/core/systemerror/application/command"
 	"github.com/BakhodiribnYashinibnMansur/XBank/internal/context/ops/core/systemerror/application/query"
-	"github.com/BakhodiribnYashinibnMansur/XBank/internal/context/ops/core/systemerror/domain/repository"
+	"github.com/BakhodiribnYashinibnMansur/XBank/internal/context/ops/core/systemerror/domain"
 	"github.com/BakhodiribnYashinibnMansur/XBank/pkg/apperror"
 	"github.com/gofiber/fiber/v2"
 )
@@ -31,7 +31,7 @@ func (h *Handler) Resolve(c *fiber.Ctx) error {
 func (h *Handler) List(c *fiber.Ctx) error {
 	limit, _ := strconv.Atoi(c.Query("limit", "20"))
 	offset, _ := strconv.Atoi(c.Query("offset", "0"))
-	result, err := h.list.Handle(c.Context(), repository.SystemErrorFilter{
+	result, err := h.list.Handle(c.Context(), domain.SystemErrorFilter{
 		Severity: c.Query("severity"), Resolution: c.Query("resolution"), Code: c.Query("code"),
 		Limit: limit, Offset: offset,
 	})

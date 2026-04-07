@@ -5,19 +5,17 @@ import (
 	"fmt"
 
 	"github.com/BakhodiribnYashinibnMansur/XBank/internal/context/admin/supporting/sitesetting/application"
-	"github.com/BakhodiribnYashinibnMansur/XBank/internal/context/admin/supporting/sitesetting/domain/entity"
-	"github.com/BakhodiribnYashinibnMansur/XBank/internal/context/admin/supporting/sitesetting/domain/event"
-	"github.com/BakhodiribnYashinibnMansur/XBank/internal/context/admin/supporting/sitesetting/domain/repository"
+	"github.com/BakhodiribnYashinibnMansur/XBank/internal/context/admin/supporting/sitesetting/domain"
 	appKernel "github.com/BakhodiribnYashinibnMansur/XBank/internal/kernel/application"
 )
 
 // UpsertHandler creates or updates a site setting by key.
 type UpsertHandler struct {
-	writeRepo repository.WriteRepository
+	writeRepo domain.WriteRepository
 	eventBus  appKernel.EventBus
 }
 
-func NewUpsertHandler(writeRepo repository.WriteRepository, eventBus appKernel.EventBus) *UpsertHandler {
+func NewUpsertHandler(writeRepo domain.WriteRepository, eventBus appKernel.EventBus) *UpsertHandler {
 	return &UpsertHandler{writeRepo: writeRepo, eventBus: eventBus}
 }
 
@@ -29,12 +27,12 @@ func (h *UpsertHandler) Handle(ctx context.Context, req application.CreateSettin
 		if err := h.writeRepo.Update(ctx, existing); err != nil {
 			return nil, fmt.Errorf("upsert setting: update: %w", err)
 		}
-		h.eventBus.Publish(ctx, event.NewSettingUpdated(existing.ID, existing.Key, existing.Value))
+		h.eventBus.Publish(ctx, domain.NewSettingUpdated(existing.ID, existing.Key, existing.Value))
 		return toResponse(existing), nil
 	}
 
 	// Create new
-	setting, err := entity.NewSiteSetting(req.Key, req.Value, req.SettingType, req.Description)
+	setting, err := domain.NewSiteSetting(req.Key, req.Value, req.SettingType, req.Description)
 	if err != nil {
 		return nil, fmt.Errorf("upsert setting: create: %w", err)
 	}
@@ -43,11 +41,11 @@ func (h *UpsertHandler) Handle(ctx context.Context, req application.CreateSettin
 		return nil, fmt.Errorf("upsert setting: save: %w", err)
 	}
 
-	h.eventBus.Publish(ctx, event.NewSettingCreated(setting.ID, setting.Key))
+	h.eventBus.Publish(ctx, domain.NewSettingCreated(setting.ID, setting.Key))
 	return toResponse(setting), nil
 }
 
-func toResponse(s *entity.SiteSetting) *application.SettingResponse {
+func toResponse(s *domain.SiteSetting) *application.SettingResponse {
 	return &application.SettingResponse{
 		ID:          s.ID,
 		Key:         s.Key,

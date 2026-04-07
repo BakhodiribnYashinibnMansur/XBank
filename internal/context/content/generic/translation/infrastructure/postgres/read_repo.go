@@ -4,7 +4,7 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/BakhodiribnYashinibnMansur/XBank/internal/context/content/generic/translation/domain/repository"
+	"github.com/BakhodiribnYashinibnMansur/XBank/internal/context/content/generic/translation/domain"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
@@ -16,8 +16,8 @@ func NewReadRepo(pool *pgxpool.Pool) *ReadRepo {
 	return &ReadRepo{pool: pool}
 }
 
-func (r *ReadRepo) FindByID(ctx context.Context, id string) (*repository.TranslationView, error) {
-	v := &repository.TranslationView{}
+func (r *ReadRepo) FindByID(ctx context.Context, id string) (*domain.TranslationView, error) {
+	v := &domain.TranslationView{}
 	err := r.pool.QueryRow(ctx,
 		`SELECT id, key, language, value, "group" FROM translations WHERE id = $1`, id,
 	).Scan(&v.ID, &v.Key, &v.Language, &v.Value, &v.Group)
@@ -27,7 +27,7 @@ func (r *ReadRepo) FindByID(ctx context.Context, id string) (*repository.Transla
 	return v, nil
 }
 
-func (r *ReadRepo) List(ctx context.Context, filter repository.TranslationFilter) ([]*repository.TranslationView, int64, error) {
+func (r *ReadRepo) List(ctx context.Context, filter domain.TranslationFilter) ([]*domain.TranslationView, int64, error) {
 	countQ := `SELECT COUNT(*) FROM translations WHERE 1=1`
 	args := []interface{}{}
 	idx := 1
@@ -82,9 +82,9 @@ func (r *ReadRepo) List(ctx context.Context, filter repository.TranslationFilter
 	}
 	defer rows.Close()
 
-	var items []*repository.TranslationView
+	var items []*domain.TranslationView
 	for rows.Next() {
-		v := &repository.TranslationView{}
+		v := &domain.TranslationView{}
 		if err := rows.Scan(&v.ID, &v.Key, &v.Language, &v.Value, &v.Group); err != nil {
 			return nil, 0, err
 		}

@@ -6,8 +6,7 @@ import (
 	"fmt"
 
 	"github.com/BakhodiribnYashinibnMansur/XBank/internal/context/ops/core/systemerror/application"
-	"github.com/BakhodiribnYashinibnMansur/XBank/internal/context/ops/core/systemerror/domain/entity"
-	"github.com/BakhodiribnYashinibnMansur/XBank/internal/context/ops/core/systemerror/domain/event"
+	"github.com/BakhodiribnYashinibnMansur/XBank/internal/context/ops/core/systemerror/domain"
 	appKernel "github.com/BakhodiribnYashinibnMansur/XBank/internal/kernel/application"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
@@ -22,7 +21,7 @@ func NewRecordHandler(pool *pgxpool.Pool, bus appKernel.EventBus) *RecordHandler
 }
 
 func (h *RecordHandler) Handle(ctx context.Context, req application.RecordErrorRequest) (string, error) {
-	e, err := entity.NewSystemError(req.Code, req.Message, req.Severity, req.Category)
+	e, err := domain.NewSystemError(req.Code, req.Message, req.Severity, req.Category)
 	if err != nil {
 		return "", fmt.Errorf("record error: %w", err)
 	}
@@ -39,6 +38,6 @@ func (h *RecordHandler) Handle(ctx context.Context, req application.RecordErrorR
 		return "", fmt.Errorf("record error: save: %w", err)
 	}
 
-	h.eventBus.Publish(ctx, event.NewErrorRecorded(e.ID, e.Code, e.Severity))
+	h.eventBus.Publish(ctx, domain.NewErrorRecorded(e.ID, e.Code, e.Severity))
 	return e.ID, nil
 }

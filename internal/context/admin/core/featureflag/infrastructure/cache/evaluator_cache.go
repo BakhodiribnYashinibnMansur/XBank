@@ -4,24 +4,23 @@ import (
 	"context"
 	"time"
 
-	"github.com/BakhodiribnYashinibnMansur/XBank/internal/context/admin/core/featureflag/domain/entity"
-	"github.com/BakhodiribnYashinibnMansur/XBank/internal/context/admin/core/featureflag/domain/repository"
+	flagDomain "github.com/BakhodiribnYashinibnMansur/XBank/internal/context/admin/core/featureflag/domain"
 	localCache "github.com/BakhodiribnYashinibnMansur/XBank/internal/infrastructure/cache"
 )
 
 // CachedEvaluator wraps WriteRepository with an LRU cache for flag lookups.
 // Cache is invalidated via Pub/Sub on featureflag.updated events.
 type CachedEvaluator struct {
-	repo  repository.WriteRepository
-	cache *localCache.LRU[string, *entity.FeatureFlag]
+	repo  flagDomain.WriteRepository
+	cache *localCache.LRU[string, *flagDomain.FeatureFlag]
 	ttl   time.Duration
 }
 
 // NewCachedEvaluator creates a cached evaluator with the given TTL.
-func NewCachedEvaluator(repo repository.WriteRepository, capacity int, ttl time.Duration) *CachedEvaluator {
+func NewCachedEvaluator(repo flagDomain.WriteRepository, capacity int, ttl time.Duration) *CachedEvaluator {
 	return &CachedEvaluator{
 		repo:  repo,
-		cache: localCache.NewLRU[string, *entity.FeatureFlag](capacity),
+		cache: localCache.NewLRU[string, *flagDomain.FeatureFlag](capacity),
 		ttl:   ttl,
 	}
 }
@@ -54,7 +53,7 @@ func (e *CachedEvaluator) GetValue(ctx context.Context, key string, userID strin
 		return "", err
 	}
 	if flag == nil {
-		return "", entity.ErrFlagNotFound
+		return "", flagDomain.ErrFlagNotFound
 	}
 
 	if !flag.Active {
@@ -81,7 +80,7 @@ func (e *CachedEvaluator) InvalidateAll() {
 	e.cache.Purge()
 }
 
-func (e *CachedEvaluator) getFlag(ctx context.Context, key string) (*entity.FeatureFlag, error) {
+func (e *CachedEvaluator) getFlag(ctx context.Context, key string) (*flagDomain.FeatureFlag, error) {
 	if cached, ok := e.cache.Get(key); ok {
 		return cached, nil
 	}

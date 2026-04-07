@@ -7,7 +7,7 @@ import (
 	"github.com/BakhodiribnYashinibnMansur/XBank/internal/context/content/supporting/announcement/application"
 	"github.com/BakhodiribnYashinibnMansur/XBank/internal/context/content/supporting/announcement/application/command"
 	"github.com/BakhodiribnYashinibnMansur/XBank/internal/context/content/supporting/announcement/application/query"
-	"github.com/BakhodiribnYashinibnMansur/XBank/internal/context/content/supporting/announcement/domain/repository"
+	"github.com/BakhodiribnYashinibnMansur/XBank/internal/context/content/supporting/announcement/domain"
 	"github.com/BakhodiribnYashinibnMansur/XBank/pkg/apperror"
 	"github.com/gofiber/fiber/v2"
 )
@@ -62,7 +62,7 @@ func (h *Handler) GetByID(c *fiber.Ctx) error {
 func (h *Handler) List(c *fiber.Ctx) error {
 	limit, _ := strconv.Atoi(c.Query("limit", "20"))
 	offset, _ := strconv.Atoi(c.Query("offset", "0"))
-	r, err := h.list.Handle(c.Context(), repository.AnnouncementFilter{
+	r, err := h.list.Handle(c.Context(), domain.AnnouncementFilter{
 		Status: c.Query("status"), Limit: limit, Offset: offset,
 	})
 	if err != nil {

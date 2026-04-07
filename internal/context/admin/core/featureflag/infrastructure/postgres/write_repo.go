@@ -4,11 +4,11 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/BakhodiribnYashinibnMansur/XBank/internal/context/admin/core/featureflag/domain/entity"
+	"github.com/BakhodiribnYashinibnMansur/XBank/internal/context/admin/core/featureflag/domain"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
-// WriteRepo implements repository.WriteRepository for PostgreSQL.
+// WriteRepo implements domain.WriteRepository for PostgreSQL.
 type WriteRepo struct {
 	pool *pgxpool.Pool
 }
@@ -17,7 +17,7 @@ func NewWriteRepo(pool *pgxpool.Pool) *WriteRepo {
 	return &WriteRepo{pool: pool}
 }
 
-func (r *WriteRepo) Save(ctx context.Context, f *entity.FeatureFlag) error {
+func (r *WriteRepo) Save(ctx context.Context, f *domain.FeatureFlag) error {
 	query := `INSERT INTO feature_flags (key, description, flag_type, default_value, active, rollout_pct, created_at, updated_at)
 	          VALUES ($1, $2, $3, $4, $5, $6, $7, $8) RETURNING id`
 	return r.pool.QueryRow(ctx, query,
@@ -25,7 +25,7 @@ func (r *WriteRepo) Save(ctx context.Context, f *entity.FeatureFlag) error {
 	).Scan(&f.ID)
 }
 
-func (r *WriteRepo) Update(ctx context.Context, f *entity.FeatureFlag) error {
+func (r *WriteRepo) Update(ctx context.Context, f *domain.FeatureFlag) error {
 	query := `UPDATE feature_flags SET description=$1, default_value=$2, active=$3, rollout_pct=$4, updated_at=$5 WHERE id=$6`
 	_, err := r.pool.Exec(ctx, query, f.Description, f.DefaultValue, f.Active, f.RolloutPct, f.UpdatedAt, f.ID)
 	return err
@@ -36,8 +36,8 @@ func (r *WriteRepo) Delete(ctx context.Context, id string) error {
 	return err
 }
 
-func (r *WriteRepo) FindByID(ctx context.Context, id string) (*entity.FeatureFlag, error) {
-	f := &entity.FeatureFlag{}
+func (r *WriteRepo) FindByID(ctx context.Context, id string) (*domain.FeatureFlag, error) {
+	f := &domain.FeatureFlag{}
 	err := r.pool.QueryRow(ctx,
 		`SELECT id, key, description, flag_type, default_value, active, rollout_pct, created_at, updated_at
 		 FROM feature_flags WHERE id = $1`, id,
@@ -51,8 +51,8 @@ func (r *WriteRepo) FindByID(ctx context.Context, id string) (*entity.FeatureFla
 	return f, nil
 }
 
-func (r *WriteRepo) FindByKey(ctx context.Context, key string) (*entity.FeatureFlag, error) {
-	f := &entity.FeatureFlag{}
+func (r *WriteRepo) FindByKey(ctx context.Context, key string) (*domain.FeatureFlag, error) {
+	f := &domain.FeatureFlag{}
 	err := r.pool.QueryRow(ctx,
 		`SELECT id, key, description, flag_type, default_value, active, rollout_pct, created_at, updated_at
 		 FROM feature_flags WHERE key = $1`, key,
@@ -66,7 +66,7 @@ func (r *WriteRepo) FindByKey(ctx context.Context, key string) (*entity.FeatureF
 	return f, nil
 }
 
-func (r *WriteRepo) FindAll(ctx context.Context) ([]*entity.FeatureFlag, error) {
+func (r *WriteRepo) FindAll(ctx context.Context) ([]*domain.FeatureFlag, error) {
 	rows, err := r.pool.Query(ctx,
 		`SELECT id, key, description, flag_type, default_value, active, rollout_pct, created_at, updated_at
 		 FROM feature_flags ORDER BY key`)
@@ -75,9 +75,9 @@ func (r *WriteRepo) FindAll(ctx context.Context) ([]*entity.FeatureFlag, error) 
 	}
 	defer rows.Close()
 
-	var flags []*entity.FeatureFlag
+	var flags []*domain.FeatureFlag
 	for rows.Next() {
-		f := &entity.FeatureFlag{}
+		f := &domain.FeatureFlag{}
 		if err := rows.Scan(&f.ID, &f.Key, &f.Description, &f.FlagType, &f.DefaultValue, &f.Active, &f.RolloutPct, &f.CreatedAt, &f.UpdatedAt); err != nil {
 			return nil, err
 		}
@@ -88,7 +88,7 @@ func (r *WriteRepo) FindAll(ctx context.Context) ([]*entity.FeatureFlag, error) 
 	return flags, nil
 }
 
-func (r *WriteRepo) loadRuleGroups(ctx context.Context, flagID string) ([]entity.RuleGroup, error) {
+func (r *WriteRepo) loadRuleGroups(ctx context.Context, flagID string) ([]domain.RuleGroup, error) {
 	rows, err := r.pool.Query(ctx,
 		`SELECT id, flag_id, name, priority, value, created_at
 		 FROM feature_flag_rule_groups WHERE flag_id = $1 ORDER BY priority`, flagID)
@@ -97,9 +97,9 @@ func (r *WriteRepo) loadRuleGroups(ctx context.Context, flagID string) ([]entity
 	}
 	defer rows.Close()
 
-	var groups []entity.RuleGroup
+	var groups []domain.RuleGroup
 	for rows.Next() {
-		rg := entity.RuleGroup{}
+		rg := domain.RuleGroup{}
 		if err := rows.Scan(&rg.ID, &rg.FlagID, &rg.Name, &rg.Priority, &rg.Value, &rg.CreatedAt); err != nil {
 			return nil, err
 		}
@@ -110,7 +110,7 @@ func (r *WriteRepo) loadRuleGroups(ctx context.Context, flagID string) ([]entity
 	return groups, nil
 }
 
-func (r *WriteRepo) loadConditions(ctx context.Context, ruleGroupID string) ([]entity.Condition, error) {
+func (r *WriteRepo) loadConditions(ctx context.Context, ruleGroupID string) ([]domain.Condition, error) {
 	rows, err := r.pool.Query(ctx,
 		`SELECT id, rule_group_id, attribute, operator, value
 		 FROM feature_flag_conditions WHERE rule_group_id = $1`, ruleGroupID)
@@ -119,9 +119,9 @@ func (r *WriteRepo) loadConditions(ctx context.Context, ruleGroupID string) ([]e
 	}
 	defer rows.Close()
 
-	var conditions []entity.Condition
+	var conditions []domain.Condition
 	for rows.Next() {
-		c := entity.Condition{}
+		c := domain.Condition{}
 		if err := rows.Scan(&c.ID, &c.RuleGroupID, &c.Attribute, &c.Operator, &c.Value); err != nil {
 			return nil, err
 		}

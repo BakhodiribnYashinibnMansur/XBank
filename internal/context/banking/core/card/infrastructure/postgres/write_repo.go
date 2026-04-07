@@ -8,6 +8,7 @@ import (
 	"github.com/BakhodiribnYashinibnMansur/XBank/internal/domain/card"
 	"github.com/BakhodiribnYashinibnMansur/XBank/internal/infrastructure/metrics"
 	"github.com/jackc/pgx/v5/pgxpool"
+	sharedPG "github.com/BakhodiribnYashinibnMansur/XBank/internal/infrastructure/postgres"
 )
 
 type CardRepository struct {
@@ -20,7 +21,7 @@ func NewCardRepository(pool *pgxpool.Pool) *CardRepository {
 
 func (r *CardRepository) Create(ctx context.Context, c *card.Card) error {
 	start := time.Now()
-	db := ExtractDBTX(ctx, r.pool)
+	db := sharedPG.ExtractDBTX(ctx, r.pool)
 	query := `
 		INSERT INTO cards (account_id, pan, masked_pan, pin_hash, expiry_month, expiry_year,
 		                   card_type, status, pin_attempts, three_ds_enrolled, three_ds_version, emv_aid,
@@ -42,7 +43,7 @@ func (r *CardRepository) Create(ctx context.Context, c *card.Card) error {
 
 func (r *CardRepository) GetByID(ctx context.Context, id string) (*card.Card, error) {
 	start := time.Now()
-	db := ExtractDBTX(ctx, r.pool)
+	db := sharedPG.ExtractDBTX(ctx, r.pool)
 	query := `
 		SELECT id, account_id, pan, masked_pan, pin_hash, expiry_month, expiry_year,
 		       card_type, status, pin_attempts, three_ds_enrolled, three_ds_version, emv_aid,
@@ -65,7 +66,7 @@ func (r *CardRepository) GetByID(ctx context.Context, id string) (*card.Card, er
 
 func (r *CardRepository) ListByAccountID(ctx context.Context, accountID string, limit, offset int) ([]*card.Card, error) {
 	start := time.Now()
-	db := ExtractDBTX(ctx, r.pool)
+	db := sharedPG.ExtractDBTX(ctx, r.pool)
 	query := `
 		SELECT id, account_id, pan, masked_pan, pin_hash, expiry_month, expiry_year,
 		       card_type, status, pin_attempts, three_ds_enrolled, three_ds_version, emv_aid,
@@ -100,7 +101,7 @@ func (r *CardRepository) ListByAccountID(ctx context.Context, accountID string, 
 
 func (r *CardRepository) CountByAccountID(ctx context.Context, accountID string) (int64, error) {
 	start := time.Now()
-	db := ExtractDBTX(ctx, r.pool)
+	db := sharedPG.ExtractDBTX(ctx, r.pool)
 	var count int64
 	err := db.QueryRow(ctx, `SELECT COUNT(*) FROM cards WHERE account_id = $1`, accountID).Scan(&count)
 	metrics.ObserveQuery("CardRepo.CountByAccountID", start, err)
@@ -109,7 +110,7 @@ func (r *CardRepository) CountByAccountID(ctx context.Context, accountID string)
 
 func (r *CardRepository) Update(ctx context.Context, c *card.Card) error {
 	start := time.Now()
-	db := ExtractDBTX(ctx, r.pool)
+	db := sharedPG.ExtractDBTX(ctx, r.pool)
 	query := `
 		UPDATE cards SET pin_hash = $1, status = $2, pin_attempts = $3,
 		       three_ds_enrolled = $4, three_ds_version = $5, emv_aid = $6, updated_at = $7

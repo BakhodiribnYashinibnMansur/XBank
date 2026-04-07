@@ -4,21 +4,21 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/BakhodiribnYashinibnMansur/XBank/internal/context/ops/core/systemerror/domain/repository"
-	"github.com/BakhodiribnYashinibnMansur/XBank/internal/kernel/domain"
+	"github.com/BakhodiribnYashinibnMansur/XBank/internal/context/ops/core/systemerror/domain"
+	kernelDomain "github.com/BakhodiribnYashinibnMansur/XBank/internal/kernel/domain"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
 type ListResult struct {
-	Items      []*repository.SystemErrorView `json:"items"`
-	Pagination domain.Pagination             `json:"pagination"`
+	Items      []*domain.SystemErrorView `json:"items"`
+	Pagination kernelDomain.Pagination             `json:"pagination"`
 }
 
 type ListHandler struct{ pool *pgxpool.Pool }
 
 func NewListHandler(pool *pgxpool.Pool) *ListHandler { return &ListHandler{pool: pool} }
 
-func (h *ListHandler) Handle(ctx context.Context, filter repository.SystemErrorFilter) (*ListResult, error) {
+func (h *ListHandler) Handle(ctx context.Context, filter domain.SystemErrorFilter) (*ListResult, error) {
 	if filter.Limit <= 0 {
 		filter.Limit = 20
 	}
@@ -79,9 +79,9 @@ func (h *ListHandler) Handle(ctx context.Context, filter repository.SystemErrorF
 	}
 	defer rows.Close()
 
-	var items []*repository.SystemErrorView
+	var items []*domain.SystemErrorView
 	for rows.Next() {
-		v := &repository.SystemErrorView{}
+		v := &domain.SystemErrorView{}
 		if err := rows.Scan(&v.ID, &v.Code, &v.Message, &v.Severity, &v.Category,
 			&v.RequestID, &v.IPAddress, &v.Path, &v.Method, &v.Resolution, &v.ResolvedBy, &v.CreatedAt); err != nil {
 			return nil, err
@@ -89,5 +89,5 @@ func (h *ListHandler) Handle(ctx context.Context, filter repository.SystemErrorF
 		items = append(items, v)
 	}
 
-	return &ListResult{Items: items, Pagination: domain.NewPagination(total, filter.Limit, filter.Offset)}, nil
+	return &ListResult{Items: items, Pagination: kernelDomain.NewPagination(total, filter.Limit, filter.Offset)}, nil
 }

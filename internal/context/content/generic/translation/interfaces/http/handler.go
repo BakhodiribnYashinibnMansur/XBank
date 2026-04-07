@@ -7,7 +7,7 @@ import (
 	"github.com/BakhodiribnYashinibnMansur/XBank/internal/context/content/generic/translation/application"
 	"github.com/BakhodiribnYashinibnMansur/XBank/internal/context/content/generic/translation/application/command"
 	"github.com/BakhodiribnYashinibnMansur/XBank/internal/context/content/generic/translation/application/query"
-	"github.com/BakhodiribnYashinibnMansur/XBank/internal/context/content/generic/translation/domain/repository"
+	"github.com/BakhodiribnYashinibnMansur/XBank/internal/context/content/generic/translation/domain"
 	"github.com/BakhodiribnYashinibnMansur/XBank/pkg/apperror"
 	"github.com/gofiber/fiber/v2"
 )
@@ -68,7 +68,7 @@ func (h *Handler) GetByID(c *fiber.Ctx) error {
 func (h *Handler) List(c *fiber.Ctx) error {
 	limit, _ := strconv.Atoi(c.Query("limit", "50"))
 	offset, _ := strconv.Atoi(c.Query("offset", "0"))
-	result, err := h.list.Handle(c.Context(), repository.TranslationFilter{
+	result, err := h.list.Handle(c.Context(), domain.TranslationFilter{
 		Language: c.Query("lang"), Group: c.Query("group"), Key: c.Query("key"),
 		Limit: limit, Offset: offset,
 	})

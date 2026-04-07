@@ -1,12 +1,12 @@
 package application
 
-import "github.com/BakhodiribnYashinibnMansur/XBank/internal/context/admin/core/featureflag/domain/entity"
+import "github.com/BakhodiribnYashinibnMansur/XBank/internal/context/admin/core/featureflag/domain"
 
 // CreateFlagRequest is the DTO for creating a feature flag.
 type CreateFlagRequest struct {
 	Key          string          `json:"key"`
 	Description  string          `json:"description"`
-	FlagType     entity.FlagType `json:"flag_type"`
+	FlagType     domain.FlagType `json:"flag_type"`
 	DefaultValue string          `json:"default_value"`
 }
 

@@ -7,8 +7,7 @@ import (
 	"github.com/BakhodiribnYashinibnMansur/XBank/internal/context/admin/supporting/sitesetting/application"
 	"github.com/BakhodiribnYashinibnMansur/XBank/internal/context/admin/supporting/sitesetting/application/command"
 	"github.com/BakhodiribnYashinibnMansur/XBank/internal/context/admin/supporting/sitesetting/application/query"
-	"github.com/BakhodiribnYashinibnMansur/XBank/internal/context/admin/supporting/sitesetting/domain/entity"
-	"github.com/BakhodiribnYashinibnMansur/XBank/internal/context/admin/supporting/sitesetting/domain/repository"
+	"github.com/BakhodiribnYashinibnMansur/XBank/internal/context/admin/supporting/sitesetting/domain"
 	"github.com/BakhodiribnYashinibnMansur/XBank/pkg/apperror"
 	"github.com/gofiber/fiber/v2"
 )
@@ -41,7 +40,7 @@ func (h *Handler) Upsert(c *fiber.Ctx) error {
 	result, err := h.upsert.Handle(c.Context(), application.CreateSettingRequest{
 		Key:         req.Key,
 		Value:       req.Value,
-		SettingType: entity.SettingType(req.SettingType),
+		SettingType: domain.SettingType(req.SettingType),
 		Description: req.Description,
 	})
 	if err != nil {
@@ -85,7 +84,7 @@ func (h *Handler) List(c *fiber.Ctx) error {
 	limit, _ := strconv.Atoi(c.Query("limit", "20"))
 	offset, _ := strconv.Atoi(c.Query("offset", "0"))
 
-	result, err := h.list.Handle(c.Context(), repository.SiteSettingFilter{
+	result, err := h.list.Handle(c.Context(), domain.SiteSettingFilter{
 		Key:         c.Query("key"),
 		SettingType: c.Query("setting_type"),
 		Limit:       limit,

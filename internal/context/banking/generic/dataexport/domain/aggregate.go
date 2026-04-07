@@ -11,7 +11,7 @@ type ExportStatus string
 const (
 	ExportPending    ExportStatus = "PENDING"
 	ExportProcessing ExportStatus = "PROCESSING"
-	ExportCompleted  ExportStatus = "COMPLETED"
+	ExportStatusCompleted ExportStatus = "COMPLETED"
 	ExportFailed     ExportStatus = "FAILED"
 )
 
@@ -49,7 +49,7 @@ func (e *DataExport) Complete(fileURL string) error {
 	if e.Status != ExportProcessing {
 		return ErrInvalidTransition
 	}
-	e.Status = ExportCompleted
+	e.Status = ExportStatusCompleted
 	e.FileURL = fileURL
 	e.Touch()
 	return nil

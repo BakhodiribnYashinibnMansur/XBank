@@ -7,6 +7,7 @@ import (
 	"github.com/BakhodiribnYashinibnMansur/XBank/internal/domain/challenge"
 	"github.com/BakhodiribnYashinibnMansur/XBank/internal/infrastructure/metrics"
 	"github.com/jackc/pgx/v5/pgxpool"
+	sharedPG "github.com/BakhodiribnYashinibnMansur/XBank/internal/infrastructure/postgres"
 )
 
 type ChallengeRepository struct {
@@ -19,7 +20,7 @@ func NewChallengeRepository(pool *pgxpool.Pool) *ChallengeRepository {
 
 func (r *ChallengeRepository) Create(ctx context.Context, c *challenge.Challenge) error {
 	start := time.Now()
-	db := ExtractDBTX(ctx, r.pool)
+	db := sharedPG.ExtractDBTX(ctx, r.pool)
 
 	_, err := db.Exec(ctx,
 		`INSERT INTO challenges (id, user_id, method, status, action, metadata, expires_at, created_at)
@@ -32,7 +33,7 @@ func (r *ChallengeRepository) Create(ctx context.Context, c *challenge.Challenge
 
 func (r *ChallengeRepository) GetByID(ctx context.Context, id string) (*challenge.Challenge, error) {
 	start := time.Now()
-	db := ExtractDBTX(ctx, r.pool)
+	db := sharedPG.ExtractDBTX(ctx, r.pool)
 
 	c := &challenge.Challenge{}
 	err := db.QueryRow(ctx,
@@ -50,7 +51,7 @@ func (r *ChallengeRepository) GetByID(ctx context.Context, id string) (*challeng
 
 func (r *ChallengeRepository) GetByToken(ctx context.Context, token string) (*challenge.Challenge, error) {
 	start := time.Now()
-	db := ExtractDBTX(ctx, r.pool)
+	db := sharedPG.ExtractDBTX(ctx, r.pool)
 
 	c := &challenge.Challenge{}
 	err := db.QueryRow(ctx,
@@ -68,7 +69,7 @@ func (r *ChallengeRepository) GetByToken(ctx context.Context, token string) (*ch
 
 func (r *ChallengeRepository) Update(ctx context.Context, c *challenge.Challenge) error {
 	start := time.Now()
-	db := ExtractDBTX(ctx, r.pool)
+	db := sharedPG.ExtractDBTX(ctx, r.pool)
 
 	_, err := db.Exec(ctx,
 		`UPDATE challenges SET status = $1, token = $2, expires_at = $3, verified_at = $4
@@ -81,7 +82,7 @@ func (r *ChallengeRepository) Update(ctx context.Context, c *challenge.Challenge
 
 func (r *ChallengeRepository) CountPendingByUser(ctx context.Context, userID string) (int, error) {
 	start := time.Now()
-	db := ExtractDBTX(ctx, r.pool)
+	db := sharedPG.ExtractDBTX(ctx, r.pool)
 
 	var count int
 	err := db.QueryRow(ctx,

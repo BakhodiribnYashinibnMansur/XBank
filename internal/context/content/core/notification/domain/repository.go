@@ -3,14 +3,13 @@ package domain
 import (
 	"context"
 
-	"github.com/BakhodiribnYashinibnMansur/XBank/internal/context/content/core/notification/domain/entity"
 )
 
 type WriteRepository interface {
-	Save(ctx context.Context, n *entity.Notification) error
-	Update(ctx context.Context, n *entity.Notification) error
+	Save(ctx context.Context, n *Notification) error
+	Update(ctx context.Context, n *Notification) error
 	Delete(ctx context.Context, id string) error
-	FindByID(ctx context.Context, id string) (*entity.Notification, error)
+	FindByID(ctx context.Context, id string) (*Notification, error)
 }
 
 type NotificationView struct {
@@ -18,7 +17,7 @@ type NotificationView struct {
 	UserID    string                   `json:"user_id"`
 	Title     string                   `json:"title"`
 	Message   string                   `json:"message"`
-	Type      entity.NotificationType  `json:"type"`
+	Type      NotificationType  `json:"type"`
 	Read      bool                     `json:"read"`
 	Data      map[string]string        `json:"data,omitempty"`
 	CreatedAt string                   `json:"created_at"`

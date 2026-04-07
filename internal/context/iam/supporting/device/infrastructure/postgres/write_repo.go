@@ -7,6 +7,7 @@ import (
 	"github.com/BakhodiribnYashinibnMansur/XBank/internal/domain/device"
 	"github.com/BakhodiribnYashinibnMansur/XBank/internal/infrastructure/metrics"
 	"github.com/jackc/pgx/v5/pgxpool"
+	sharedPG "github.com/BakhodiribnYashinibnMansur/XBank/internal/infrastructure/postgres"
 )
 
 type DeviceRepository struct {
@@ -19,7 +20,7 @@ func NewDeviceRepository(pool *pgxpool.Pool) *DeviceRepository {
 
 func (r *DeviceRepository) Upsert(ctx context.Context, fp *device.Fingerprint) error {
 	start := time.Now()
-	db := ExtractDBTX(ctx, r.pool)
+	db := sharedPG.ExtractDBTX(ctx, r.pool)
 	fp.LastUsedAt = time.Now()
 	err := db.QueryRow(ctx,
 		`INSERT INTO device_fingerprints (user_id, device_hash, device_name, ip_address, trusted, last_used_at, created_at)
@@ -35,7 +36,7 @@ func (r *DeviceRepository) Upsert(ctx context.Context, fp *device.Fingerprint) e
 
 func (r *DeviceRepository) GetByUserAndDevice(ctx context.Context, userID, deviceHash string) (*device.Fingerprint, error) {
 	start := time.Now()
-	db := ExtractDBTX(ctx, r.pool)
+	db := sharedPG.ExtractDBTX(ctx, r.pool)
 	fp := &device.Fingerprint{}
 	err := db.QueryRow(ctx,
 		`SELECT id, user_id, device_hash, device_name, ip_address, trusted, last_used_at, created_at
@@ -51,7 +52,7 @@ func (r *DeviceRepository) GetByUserAndDevice(ctx context.Context, userID, devic
 
 func (r *DeviceRepository) ListByUserID(ctx context.Context, userID string) ([]*device.Fingerprint, error) {
 	start := time.Now()
-	db := ExtractDBTX(ctx, r.pool)
+	db := sharedPG.ExtractDBTX(ctx, r.pool)
 	rows, err := db.Query(ctx,
 		`SELECT id, user_id, device_hash, device_name, ip_address, trusted, last_used_at, created_at
 		 FROM device_fingerprints WHERE user_id = $1 ORDER BY last_used_at DESC`, userID)
@@ -76,7 +77,7 @@ func (r *DeviceRepository) ListByUserID(ctx context.Context, userID string) ([]*
 
 func (r *DeviceRepository) Delete(ctx context.Context, id string) error {
 	start := time.Now()
-	db := ExtractDBTX(ctx, r.pool)
+	db := sharedPG.ExtractDBTX(ctx, r.pool)
 	_, err := db.Exec(ctx, `DELETE FROM device_fingerprints WHERE id = $1`, id)
 	metrics.ObserveQuery("DeviceRepo.Delete", start, err)
 	return err

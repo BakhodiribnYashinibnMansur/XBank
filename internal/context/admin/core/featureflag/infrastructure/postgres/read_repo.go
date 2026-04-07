@@ -4,11 +4,11 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/BakhodiribnYashinibnMansur/XBank/internal/context/admin/core/featureflag/domain/repository"
+	"github.com/BakhodiribnYashinibnMansur/XBank/internal/context/admin/core/featureflag/domain"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
-// ReadRepo implements repository.ReadRepository for feature flags.
+// ReadRepo implements domain.ReadRepository for feature flags.
 type ReadRepo struct {
 	pool *pgxpool.Pool
 }
@@ -17,8 +17,8 @@ func NewReadRepo(pool *pgxpool.Pool) *ReadRepo {
 	return &ReadRepo{pool: pool}
 }
 
-func (r *ReadRepo) FindByID(ctx context.Context, id string) (*repository.FeatureFlagView, error) {
-	v := &repository.FeatureFlagView{}
+func (r *ReadRepo) FindByID(ctx context.Context, id string) (*domain.FeatureFlagView, error) {
+	v := &domain.FeatureFlagView{}
 	err := r.pool.QueryRow(ctx,
 		`SELECT id, key, description, flag_type, default_value, active, rollout_pct,
 		        to_char(created_at, 'YYYY-MM-DD"T"HH24:MI:SS"Z"'),
@@ -33,7 +33,7 @@ func (r *ReadRepo) FindByID(ctx context.Context, id string) (*repository.Feature
 	return v, nil
 }
 
-func (r *ReadRepo) List(ctx context.Context, filter repository.FeatureFlagFilter) ([]*repository.FeatureFlagView, int64, error) {
+func (r *ReadRepo) List(ctx context.Context, filter domain.FeatureFlagFilter) ([]*domain.FeatureFlagView, int64, error) {
 	countQuery := `SELECT COUNT(*) FROM feature_flags WHERE 1=1`
 	args := []interface{}{}
 	idx := 1
@@ -81,9 +81,9 @@ func (r *ReadRepo) List(ctx context.Context, filter repository.FeatureFlagFilter
 	}
 	defer rows.Close()
 
-	var items []*repository.FeatureFlagView
+	var items []*domain.FeatureFlagView
 	for rows.Next() {
-		v := &repository.FeatureFlagView{}
+		v := &domain.FeatureFlagView{}
 		if err := rows.Scan(&v.ID, &v.Key, &v.Description, &v.FlagType, &v.DefaultValue, &v.Active, &v.RolloutPct, &v.CreatedAt, &v.UpdatedAt); err != nil {
 			return nil, 0, err
 		}
@@ -93,7 +93,7 @@ func (r *ReadRepo) List(ctx context.Context, filter repository.FeatureFlagFilter
 	return items, total, nil
 }
 
-func (r *ReadRepo) loadRuleGroupViews(ctx context.Context, flagID string) ([]repository.RuleGroupView, error) {
+func (r *ReadRepo) loadRuleGroupViews(ctx context.Context, flagID string) ([]domain.RuleGroupView, error) {
 	rows, err := r.pool.Query(ctx,
 		`SELECT id, name, priority, value FROM feature_flag_rule_groups WHERE flag_id = $1 ORDER BY priority`, flagID)
 	if err != nil {
@@ -101,9 +101,9 @@ func (r *ReadRepo) loadRuleGroupViews(ctx context.Context, flagID string) ([]rep
 	}
 	defer rows.Close()
 
-	var groups []repository.RuleGroupView
+	var groups []domain.RuleGroupView
 	for rows.Next() {
-		rg := repository.RuleGroupView{}
+		rg := domain.RuleGroupView{}
 		if err := rows.Scan(&rg.ID, &rg.Name, &rg.Priority, &rg.Value); err != nil {
 			return nil, err
 		}
@@ -113,7 +113,7 @@ func (r *ReadRepo) loadRuleGroupViews(ctx context.Context, flagID string) ([]rep
 	return groups, nil
 }
 
-func (r *ReadRepo) loadConditionViews(ctx context.Context, ruleGroupID string) ([]repository.ConditionView, error) {
+func (r *ReadRepo) loadConditionViews(ctx context.Context, ruleGroupID string) ([]domain.ConditionView, error) {
 	rows, err := r.pool.Query(ctx,
 		`SELECT id, attribute, operator, value FROM feature_flag_conditions WHERE rule_group_id = $1`, ruleGroupID)
 	if err != nil {
@@ -121,9 +121,9 @@ func (r *ReadRepo) loadConditionViews(ctx context.Context, ruleGroupID string) (
 	}
 	defer rows.Close()
 
-	var conditions []repository.ConditionView
+	var conditions []domain.ConditionView
 	for rows.Next() {
-		c := repository.ConditionView{}
+		c := domain.ConditionView{}
 		if err := rows.Scan(&c.ID, &c.Attribute, &c.Operator, &c.Value); err != nil {
 			return nil, err
 		}

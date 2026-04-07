@@ -1,12 +1,12 @@
 package application
 
-import "github.com/BakhodiribnYashinibnMansur/XBank/internal/context/admin/supporting/sitesetting/domain/entity"
+import "github.com/BakhodiribnYashinibnMansur/XBank/internal/context/admin/supporting/sitesetting/domain"
 
 // CreateSettingRequest is the DTO for creating a site setting.
 type CreateSettingRequest struct {
 	Key         string             `json:"key"`
 	Value       string             `json:"value"`
-	SettingType entity.SettingType `json:"setting_type"`
+	SettingType domain.SettingType `json:"setting_type"`
 	Description string             `json:"description"`
 }
 

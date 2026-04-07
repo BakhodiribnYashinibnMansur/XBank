@@ -8,6 +8,7 @@ import (
 	"github.com/BakhodiribnYashinibnMansur/XBank/internal/domain/exchange"
 	"github.com/BakhodiribnYashinibnMansur/XBank/internal/infrastructure/metrics"
 	"github.com/jackc/pgx/v5/pgxpool"
+	sharedPG "github.com/BakhodiribnYashinibnMansur/XBank/internal/infrastructure/postgres"
 )
 
 type ExchangeRepository struct {
@@ -20,7 +21,7 @@ func NewExchangeRepository(pool *pgxpool.Pool) *ExchangeRepository {
 
 func (r *ExchangeRepository) Upsert(ctx context.Context, rate *exchange.Rate) error {
 	start := time.Now()
-	db := ExtractDBTX(ctx, r.pool)
+	db := sharedPG.ExtractDBTX(ctx, r.pool)
 	rate.UpdatedAt = time.Now()
 	err := db.QueryRow(ctx,
 		`INSERT INTO exchange_rates (from_currency, to_currency, buy_rate, sell_rate, updated_at)
@@ -39,7 +40,7 @@ func (r *ExchangeRepository) Upsert(ctx context.Context, rate *exchange.Rate) er
 
 func (r *ExchangeRepository) GetRate(ctx context.Context, from, to string) (*exchange.Rate, error) {
 	start := time.Now()
-	db := ExtractDBTX(ctx, r.pool)
+	db := sharedPG.ExtractDBTX(ctx, r.pool)
 	rate := &exchange.Rate{}
 	err := db.QueryRow(ctx,
 		`SELECT id, from_currency, to_currency, buy_rate, sell_rate, updated_at
@@ -55,7 +56,7 @@ func (r *ExchangeRepository) GetRate(ctx context.Context, from, to string) (*exc
 
 func (r *ExchangeRepository) ListAll(ctx context.Context) ([]*exchange.Rate, error) {
 	start := time.Now()
-	db := ExtractDBTX(ctx, r.pool)
+	db := sharedPG.ExtractDBTX(ctx, r.pool)
 	rows, err := db.Query(ctx,
 		`SELECT id, from_currency, to_currency, buy_rate, sell_rate, updated_at
 		 FROM exchange_rates ORDER BY from_currency, to_currency`)

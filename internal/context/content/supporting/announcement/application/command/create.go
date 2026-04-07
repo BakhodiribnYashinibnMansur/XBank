@@ -5,18 +5,17 @@ import (
 	"fmt"
 
 	"github.com/BakhodiribnYashinibnMansur/XBank/internal/context/content/supporting/announcement/application"
-	"github.com/BakhodiribnYashinibnMansur/XBank/internal/context/content/supporting/announcement/domain/entity"
-	"github.com/BakhodiribnYashinibnMansur/XBank/internal/context/content/supporting/announcement/domain/repository"
+	"github.com/BakhodiribnYashinibnMansur/XBank/internal/context/content/supporting/announcement/domain"
 )
 
-type CreateHandler struct{ repo repository.WriteRepository }
+type CreateHandler struct{ repo domain.WriteRepository }
 
-func NewCreateHandler(repo repository.WriteRepository) *CreateHandler {
+func NewCreateHandler(repo domain.WriteRepository) *CreateHandler {
 	return &CreateHandler{repo: repo}
 }
 
 func (h *CreateHandler) Handle(ctx context.Context, req application.CreateAnnouncementRequest) (string, error) {
-	a, err := entity.NewAnnouncement(req.TitleUz, req.TitleRu, req.TitleEn, req.BodyUz, req.BodyRu, req.BodyEn, req.Priority)
+	a, err := domain.NewAnnouncement(req.TitleUz, req.TitleRu, req.TitleEn, req.BodyUz, req.BodyRu, req.BodyEn, req.Priority)
 	if err != nil {
 		return "", fmt.Errorf("create announcement: %w", err)
 	}

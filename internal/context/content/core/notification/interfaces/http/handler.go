@@ -7,7 +7,7 @@ import (
 	"github.com/BakhodiribnYashinibnMansur/XBank/internal/context/content/core/notification/application"
 	"github.com/BakhodiribnYashinibnMansur/XBank/internal/context/content/core/notification/application/command"
 	"github.com/BakhodiribnYashinibnMansur/XBank/internal/context/content/core/notification/application/query"
-	"github.com/BakhodiribnYashinibnMansur/XBank/internal/context/content/core/notification/domain/repository"
+	"github.com/BakhodiribnYashinibnMansur/XBank/internal/context/content/core/notification/domain"
 	"github.com/BakhodiribnYashinibnMansur/XBank/pkg/apperror"
 	"github.com/gofiber/fiber/v2"
 )
@@ -71,7 +71,7 @@ func (h *Handler) List(c *fiber.Ctx) error {
 		unread = &v
 	}
 
-	result, err := h.list.Handle(c.Context(), repository.NotificationFilter{
+	result, err := h.list.Handle(c.Context(), domain.NotificationFilter{
 		UserID: userID, Type: c.Query("type"), Unread: unread,
 		Limit: limit, Offset: offset,
 	})
