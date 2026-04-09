@@ -10,7 +10,6 @@ import (
 	"github.com/BakhodiribnYashinibnMansur/XBank/internal/kernel/infrastructure/config"
 	infraCrypto "github.com/BakhodiribnYashinibnMansur/XBank/internal/kernel/infrastructure/security/crypto"
 	infraAuth "github.com/BakhodiribnYashinibnMansur/XBank/internal/kernel/infrastructure/security/jwt"
-	infraMongo "github.com/BakhodiribnYashinibnMansur/XBank/internal/kernel/infrastructure/db/mongodb"
 	"github.com/BakhodiribnYashinibnMansur/XBank/internal/kernel/infrastructure/middleware"
 	"github.com/BakhodiribnYashinibnMansur/XBank/internal/kernel/infrastructure/sse"
 	"github.com/BakhodiribnYashinibnMansur/XBank/pkg/apperror"
@@ -33,7 +32,6 @@ func RegisterDDDRoutes(
 	bcs *DDDBoundedContexts,
 	pool *pgxpool.Pool,
 	mongoClient *mongo.Client,
-	auditReader *infraMongo.AuditReader,
 	sseHub *sse.Hub,
 	jwtService *infraAuth.JWTService,
 	adminWhitelist *middleware.DynamicIPWhitelist,
@@ -44,6 +42,7 @@ func RegisterDDDRoutes(
 	app := fiber.New(fiber.Config{
 		AppName:      cfg.App.Name,
 		ErrorHandler: apperror.ErrorHandler,
+		BodyLimit:    10 * 1024 * 1024, // 10MB max request body (DoS prevention)
 	})
 
 	// Global middleware chain
@@ -89,7 +88,7 @@ func RegisterDDDRoutes(
 
 	// ── Admin routes (ADMIN role + IP whitelist) ───────────────
 	admin := protected.Group("/admin", middleware.RequireRole("ADMIN"), adminWhitelist.Middleware())
-	registerAdminRoutes(admin, bcs, auditReader)
+	registerAdminRoutes(admin, bcs)
 
 	// ── SSE notification stream ────────────────────────────────
 	if sseHub != nil {
@@ -182,7 +181,7 @@ func registerProtectedRoutes(
 }
 
 // registerAdminRoutes registers admin-only routes.
-func registerAdminRoutes(admin fiber.Router, bcs *DDDBoundedContexts, auditReader *infraMongo.AuditReader) {
+func registerAdminRoutes(admin fiber.Router, bcs *DDDBoundedContexts) {
 	// KYC BC — admin
 	bcs.KYC.Handler.RegisterAdminRoutes(admin)
 
@@ -192,9 +191,11 @@ func registerAdminRoutes(admin fiber.Router, bcs *DDDBoundedContexts, auditReade
 	// Reconciliation BC
 	bcs.Reconciliation.Handler.RegisterRoutes(admin)
 
-	// Audit handler (infrastructure)
-	auditHandler := NewAuditHandler(auditReader)
-	admin.Get("/audit", auditHandler.List)
+	// Authz BC — RBAC management
+	bcs.Authz.Handler.RegisterRoutes(admin)
+
+	// Audit BC
+	bcs.Audit.Handler.RegisterRoutes(admin)
 
 	// System Error BC
 	bcs.SystemError.Handler.RegisterRoutes(admin)

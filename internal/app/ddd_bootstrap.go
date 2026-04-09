@@ -2,6 +2,7 @@ package app
 
 import (
 	"github.com/BakhodiribnYashinibnMansur/XBank/internal/context/admin/generic/featureflag"
+	"github.com/BakhodiribnYashinibnMansur/XBank/internal/context/admin/supporting/integration"
 	"github.com/BakhodiribnYashinibnMansur/XBank/internal/context/admin/supporting/sitesetting"
 	"github.com/BakhodiribnYashinibnMansur/XBank/internal/context/admin/supporting/statistics"
 	"github.com/BakhodiribnYashinibnMansur/XBank/internal/context/banking/core/account"
@@ -17,11 +18,16 @@ import (
 	"github.com/BakhodiribnYashinibnMansur/XBank/internal/context/content/generic/translation"
 	"github.com/BakhodiribnYashinibnMansur/XBank/internal/context/content/supporting/announcement"
 	"github.com/BakhodiribnYashinibnMansur/XBank/internal/context/iam/core/challenge"
+	"github.com/BakhodiribnYashinibnMansur/XBank/internal/context/iam/generic/authz"
 	"github.com/BakhodiribnYashinibnMansur/XBank/internal/context/iam/generic/session"
 	"github.com/BakhodiribnYashinibnMansur/XBank/internal/context/iam/generic/user"
+	"github.com/BakhodiribnYashinibnMansur/XBank/internal/context/iam/supporting/audit"
 	"github.com/BakhodiribnYashinibnMansur/XBank/internal/context/iam/supporting/contact"
+	"github.com/BakhodiribnYashinibnMansur/XBank/internal/context/ops/generic/metric"
+	"github.com/BakhodiribnYashinibnMansur/XBank/internal/context/ops/generic/ratelimit"
 	"github.com/BakhodiribnYashinibnMansur/XBank/internal/context/ops/generic/systemerror"
 	"github.com/BakhodiribnYashinibnMansur/XBank/internal/context/ops/supporting/errorcode"
+	"github.com/BakhodiribnYashinibnMansur/XBank/internal/context/ops/supporting/iprule"
 	appKernel "github.com/BakhodiribnYashinibnMansur/XBank/internal/kernel/application"
 	"github.com/BakhodiribnYashinibnMansur/XBank/internal/kernel/domain"
 	"github.com/BakhodiribnYashinibnMansur/XBank/internal/kernel/infrastructure/config"
@@ -52,9 +58,11 @@ type DDDBoundedContexts struct {
 	// IAM — Generic
 	User    *user.BoundedContext
 	Session *session.BoundedContext
+	Authz   *authz.BoundedContext
 
 	// IAM — Supporting
 	Contact *contact.BoundedContext
+	Audit   *audit.BoundedContext
 
 	// Admin — Generic
 	FeatureFlag *featureflag.BoundedContext
@@ -62,6 +70,7 @@ type DDDBoundedContexts struct {
 	// Admin — Supporting
 	SiteSetting *sitesetting.BoundedContext
 	Statistics  *statistics.BoundedContext
+	Integration *integration.BoundedContext
 
 	// Content — Generic
 	Notification *notification.BoundedContext
@@ -72,9 +81,12 @@ type DDDBoundedContexts struct {
 
 	// Ops — Generic
 	SystemError *systemerror.BoundedContext
+	RateLimit   *ratelimit.BoundedContext
+	Metric      *metric.BoundedContext
 
 	// Ops — Supporting
 	ErrorCode *errorcode.BoundedContext
+	IPRule    *iprule.BoundedContext
 }
 
 // NewDDDBoundedContexts instantiates all Bounded Contexts with their dependencies.
@@ -100,8 +112,12 @@ func NewDDDBoundedContexts(
 	// IAM — Core
 	challengeBC := challenge.NewBoundedContext(pool, userBC.Repo, challengeCache)
 
+	// IAM — Generic (authz)
+	authzBC := authz.NewBoundedContext(pool)
+
 	// IAM — Supporting
 	contactBC := contact.NewBoundedContext(pool)
+	auditBC := audit.NewBoundedContext(pool)
 
 	// Banking — Core
 	ledgerBC := ledger.NewBoundedContext(pool)
@@ -128,7 +144,13 @@ func NewDDDBoundedContexts(
 
 	// Ops
 	systemErrorBC := systemerror.NewBoundedContext(pool, eventBus)
+	rateLimitBC := ratelimit.NewBoundedContext(pool)
+	metricBC := metric.NewBoundedContext(pool)
 	errorCodeBC := errorcode.NewBoundedContext(pool)
+	ipRuleBC := iprule.NewBoundedContext(pool)
+
+	// Admin — Supporting (integration)
+	integrationBC := integration.NewBoundedContext(pool)
 
 	return &DDDBoundedContexts{
 		Account:        accountBC,
@@ -143,7 +165,9 @@ func NewDDDBoundedContexts(
 		Challenge:      challengeBC,
 		User:           userBC,
 		Session:        sessionBC,
+		Authz:          authzBC,
 		Contact:        contactBC,
+		Audit:          auditBC,
 		FeatureFlag:    featureFlagBC,
 		SiteSetting:    siteSettingBC,
 		Statistics:     statisticsBC,
@@ -151,6 +175,10 @@ func NewDDDBoundedContexts(
 		Translation:    translationBC,
 		Announcement:   announcementBC,
 		SystemError:    systemErrorBC,
+		RateLimit:      rateLimitBC,
+		Metric:         metricBC,
 		ErrorCode:      errorCodeBC,
+		IPRule:         ipRuleBC,
+		Integration:    integrationBC,
 	}
 }
