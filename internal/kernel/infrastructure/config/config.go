@@ -2,104 +2,39 @@ package config
 
 import (
 	"log"
-	"os"
 	"strings"
 	"time"
 
-	"gopkg.in/yaml.v3"
+	"github.com/spf13/viper"
 )
 
 type Config struct {
-	App       AppConfig       `yaml:"app"`
-	JWT       JWTConfig       `yaml:"jwt"`
-	HMAC      HMACConfig      `yaml:"hmac"`
-	RateLimit RateLimitConfig `yaml:"rate_limit"`
-	CORS      CORSConfig      `yaml:"cors"`
-	Kafka     KafkaConfig     `yaml:"kafka"`
-	MongoDB   MongoDBConfig   `yaml:"mongodb"`
-	Jaeger    JaegerConfig    `yaml:"jaeger"`
-	Redis      RedisConfig
-	Encryption EncryptionConfig
-	Database   DatabaseConfig
-	Vault      VaultConfig
-}
-
-type VaultConfig struct {
-	Enabled   bool   // VAULT_ENABLED env
-	Address   string // VAULT_ADDR env
-	Token     string // VAULT_TOKEN env
-	MountPath string // VAULT_MOUNT_PATH env (default: "secret")
-}
-
-type JaegerConfig struct {
-	Enabled  bool   `yaml:"enabled"`
-	Endpoint string `yaml:"endpoint"`
+	App        AppConfig        `mapstructure:"app"`
+	JWT        JWTConfig        `mapstructure:"jwt"`
+	HMAC       HMACConfig       `mapstructure:"hmac"`
+	RateLimit  RateLimitConfig  `mapstructure:"rate_limit"`
+	CORS       CORSConfig       `mapstructure:"cors"`
+	Kafka      KafkaConfig      `mapstructure:"kafka"`
+	MongoDB    MongoDBConfig    `mapstructure:"mongodb"`
+	Jaeger     JaegerConfig     `mapstructure:"jaeger"`
+	Redis      RedisConfig      `mapstructure:"redis"`
+	Encryption EncryptionConfig `mapstructure:"encryption"`
+	Database   DatabaseConfig   `mapstructure:"database"`
+	Vault      VaultConfig      `mapstructure:"vault"`
 }
 
 type AppConfig struct {
-	Name string `yaml:"name"`
-	Port int    `yaml:"port"`
+	Name string `mapstructure:"name"`
+	Port int    `mapstructure:"port"`
 }
 
 type JWTConfig struct {
-	PrivateKeyPath   string `yaml:"private_key_path"`
-	PublicKeyPath    string `yaml:"public_key_path"`
-	Issuer           string `yaml:"issuer"`
-	Audience         string `yaml:"audience"`
-	AccessTTLMinutes int    `yaml:"access_ttl_minutes"`
-	RefreshTTLDays   int    `yaml:"refresh_ttl_days"`
-}
-
-type RateLimitConfig struct {
-	MaxRequests   int `yaml:"max_requests"`
-	WindowMinutes int `yaml:"window_minutes"`
-}
-
-type CORSConfig struct {
-	AllowedOrigins []string `yaml:"allowed_origins"`
-}
-
-type KafkaConfig struct {
-	Brokers           []string          `yaml:"brokers"`
-	Topics            KafkaTopicsConfig `yaml:"topics"`
-	SchemaRegistryURL string            // from ENV: SCHEMA_REGISTRY_URL
-}
-
-type KafkaTopicsConfig struct {
-	AccountOpened    string `yaml:"account_opened"`
-	AccountCredited  string `yaml:"account_credited"`
-	AccountDebited   string `yaml:"account_debited"`
-	AccountFrozen    string `yaml:"account_frozen"`
-	AccountClosed    string `yaml:"account_closed"`
-	TransferCreated  string `yaml:"transfer_created"`
-	TransferCompleted string `yaml:"transfer_completed"`
-	TransferFailed   string `yaml:"transfer_failed"`
-}
-
-type HMACConfig struct {
-	MaxClockSkewMinutes int `yaml:"max_clock_skew_minutes"`
-}
-
-func (h *HMACConfig) MaxClockSkew() time.Duration {
-	return time.Duration(h.MaxClockSkewMinutes) * time.Minute
-}
-
-type EncryptionConfig struct {
-	CardKey    string // 32-byte hex key from ENV
-	HMACSecret string // 32-byte hex key from ENV
-}
-
-type RedisConfig struct {
-	URL string // env dan o'qiladi
-}
-
-type MongoDBConfig struct {
-	URI      string // env dan o'qiladi
-	Database string `yaml:"database"`
-}
-
-type DatabaseConfig struct {
-	URL string
+	PrivateKeyPath   string `mapstructure:"private_key_path"`
+	PublicKeyPath    string `mapstructure:"public_key_path"`
+	Issuer           string `mapstructure:"issuer"`
+	Audience         string `mapstructure:"audience"`
+	AccessTTLMinutes int    `mapstructure:"access_ttl_minutes"`
+	RefreshTTLDays   int    `mapstructure:"refresh_ttl_days"`
 }
 
 func (j *JWTConfig) AccessTTL() time.Duration {
@@ -110,55 +45,146 @@ func (j *JWTConfig) RefreshTTL() time.Duration {
 	return time.Duration(j.RefreshTTLDays) * 24 * time.Hour
 }
 
+type HMACConfig struct {
+	MaxClockSkewMinutes int `mapstructure:"max_clock_skew_minutes"`
+}
+
+func (h *HMACConfig) MaxClockSkew() time.Duration {
+	return time.Duration(h.MaxClockSkewMinutes) * time.Minute
+}
+
+type RateLimitConfig struct {
+	MaxRequests   int `mapstructure:"max_requests"`
+	WindowMinutes int `mapstructure:"window_minutes"`
+}
+
 func (r *RateLimitConfig) Window() time.Duration {
 	return time.Duration(r.WindowMinutes) * time.Minute
+}
+
+type CORSConfig struct {
+	AllowedOrigins []string `mapstructure:"allowed_origins"`
 }
 
 func (c *CORSConfig) Origins() string {
 	return strings.Join(c.AllowedOrigins, ",")
 }
 
-func Load(path string) *Config {
-	cfg := &Config{}
-
-	data, err := os.ReadFile(path)
-	if err != nil {
-		log.Fatalf("config.yml o'qib bo'lmadi: %v", err)
-	}
-
-	if err := yaml.Unmarshal(data, cfg); err != nil {
-		log.Fatalf("config.yml parse xatolik: %v", err)
-	}
-
-	// Secrets from ENV
-	cfg.Database.URL = getEnv("DATABASE_URL", "postgres://postgres:postgres@localhost:5432/xbank?sslmode=disable")
-
-	// Warn if SSL is disabled in production
-	if !strings.Contains(cfg.Database.URL, "sslmode=verify") && getEnv("APP_ENV", "development") == "production" {
-		log.Println("WARNING: DATABASE_URL does not use sslmode=verify-full. This is insecure for production!")
-	}
-	cfg.MongoDB.URI = getEnv("MONGODB_URI", "mongodb://localhost:27017")
-	cfg.Redis.URL = getEnv("REDIS_URL", "redis://localhost:6379/0")
-	cfg.Kafka.SchemaRegistryURL = getEnv("SCHEMA_REGISTRY_URL", "")
-	cfg.Encryption.CardKey = getEnv("CARD_ENCRYPTION_KEY", "")
-	cfg.Encryption.HMACSecret = getEnv("HMAC_SECRET", "")
-
-	if endpoint := os.Getenv("JAEGER_ENDPOINT"); endpoint != "" {
-		cfg.Jaeger.Endpoint = endpoint
-	}
-
-	// Vault
-	cfg.Vault.Enabled = getEnv("VAULT_ENABLED", "") == "true"
-	cfg.Vault.Address = getEnv("VAULT_ADDR", "http://localhost:8200")
-	cfg.Vault.Token = getEnv("VAULT_TOKEN", "")
-	cfg.Vault.MountPath = getEnv("VAULT_MOUNT_PATH", "secret")
-
-	return cfg
+type KafkaConfig struct {
+	Brokers           []string          `mapstructure:"brokers"`
+	Topics            KafkaTopicsConfig `mapstructure:"topics"`
+	SchemaRegistryURL string            `mapstructure:"schema_registry_url"`
 }
 
-func getEnv(key, defaultVal string) string {
-	if val := os.Getenv(key); val != "" {
-		return val
+type KafkaTopicsConfig struct {
+	AccountOpened     string `mapstructure:"account_opened"`
+	AccountCredited   string `mapstructure:"account_credited"`
+	AccountDebited    string `mapstructure:"account_debited"`
+	AccountFrozen     string `mapstructure:"account_frozen"`
+	AccountClosed     string `mapstructure:"account_closed"`
+	TransferCreated   string `mapstructure:"transfer_created"`
+	TransferCompleted string `mapstructure:"transfer_completed"`
+	TransferFailed    string `mapstructure:"transfer_failed"`
+}
+
+type MongoDBConfig struct {
+	URI      string `mapstructure:"uri"`
+	Database string `mapstructure:"database"`
+}
+
+type RedisConfig struct {
+	URL string `mapstructure:"url"`
+}
+
+type DatabaseConfig struct {
+	URL string `mapstructure:"url"`
+}
+
+type EncryptionConfig struct {
+	CardKey    string `mapstructure:"card_key"`
+	HMACSecret string `mapstructure:"hmac_secret"`
+}
+
+type VaultConfig struct {
+	Enabled   bool   `mapstructure:"enabled"`
+	Address   string `mapstructure:"address"`
+	Token     string `mapstructure:"token"`
+	MountPath string `mapstructure:"mount_path"`
+}
+
+type JaegerConfig struct {
+	Enabled  bool   `mapstructure:"enabled"`
+	Endpoint string `mapstructure:"endpoint"`
+}
+
+// Load reads configuration from YAML file and environment variables.
+// ENV variables override YAML values. Prefix: XBANK_
+// Example: XBANK_DATABASE_URL overrides database.url
+func Load(path string) *Config {
+	v := viper.New()
+
+	// Defaults
+	v.SetDefault("app.name", "XBank")
+	v.SetDefault("app.port", 3000)
+	v.SetDefault("jwt.issuer", "xbank-api")
+	v.SetDefault("jwt.audience", "xbank-client")
+	v.SetDefault("jwt.access_ttl_minutes", 15)
+	v.SetDefault("jwt.refresh_ttl_days", 30)
+	v.SetDefault("jwt.private_key_path", "keys/private.pem")
+	v.SetDefault("jwt.public_key_path", "keys/public.pem")
+	v.SetDefault("rate_limit.max_requests", 60)
+	v.SetDefault("rate_limit.window_minutes", 1)
+	v.SetDefault("hmac.max_clock_skew_minutes", 5)
+	v.SetDefault("cors.allowed_origins", []string{"http://localhost:3000"})
+	v.SetDefault("database.url", "postgres://postgres:postgres@localhost:5432/xbank?sslmode=disable")
+	v.SetDefault("redis.url", "redis://localhost:6379/0")
+	v.SetDefault("mongodb.uri", "mongodb://localhost:27017")
+	v.SetDefault("mongodb.database", "xbank_audit")
+	v.SetDefault("jaeger.enabled", true)
+	v.SetDefault("jaeger.endpoint", "localhost:4318")
+	v.SetDefault("kafka.brokers", []string{"localhost:9092"})
+	v.SetDefault("vault.address", "http://localhost:8200")
+	v.SetDefault("vault.mount_path", "secret")
+
+	// YAML config file
+	v.SetConfigFile(path)
+	if err := v.ReadInConfig(); err != nil {
+		log.Fatalf("config file o'qib bo'lmadi (%s): %v", path, err)
 	}
-	return defaultVal
+
+	// Environment variables (XBANK_ prefix)
+	v.SetEnvPrefix("XBANK")
+	v.SetEnvKeyReplacer(strings.NewReplacer(".", "_"))
+	v.AutomaticEnv()
+
+	// Legacy ENV variable bindings (backward compatibility)
+	v.BindEnv("database.url", "DATABASE_URL")
+	v.BindEnv("redis.url", "REDIS_URL")
+	v.BindEnv("mongodb.uri", "MONGODB_URI")
+	v.BindEnv("encryption.card_key", "CARD_ENCRYPTION_KEY")
+	v.BindEnv("encryption.hmac_secret", "HMAC_SECRET")
+	v.BindEnv("kafka.schema_registry_url", "SCHEMA_REGISTRY_URL")
+	v.BindEnv("jaeger.endpoint", "JAEGER_ENDPOINT")
+	v.BindEnv("vault.enabled", "VAULT_ENABLED")
+	v.BindEnv("vault.address", "VAULT_ADDR")
+	v.BindEnv("vault.token", "VAULT_TOKEN")
+	v.BindEnv("vault.mount_path", "VAULT_MOUNT_PATH")
+
+	cfg := &Config{}
+	if err := v.Unmarshal(cfg); err != nil {
+		log.Fatalf("config unmarshal xatolik: %v", err)
+	}
+
+	// Production SSL warning
+	if !strings.Contains(cfg.Database.URL, "sslmode=verify") {
+		env := v.GetString("app_env")
+		if env == "" {
+			env = "development"
+		}
+		if env == "production" {
+			log.Println("WARNING: DATABASE_URL does not use sslmode=verify-full. This is insecure for production!")
+		}
+	}
+
+	return cfg
 }

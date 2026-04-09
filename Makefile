@@ -8,9 +8,9 @@ MIGRATIONS_DIR = ./migrations
 run:
 	go run ./cmd/app
 
-# Binary build qilish
+# Binary build qilish (reproducible, stripped)
 build:
-	CGO_ENABLED=0 go build -o bin/xbank ./cmd/app
+	CGO_ENABLED=0 go build -trimpath -ldflags="-s -w" -o bin/xbank ./cmd/app
 
 # Build artefaktlarni tozalash
 clean:
@@ -19,6 +19,34 @@ clean:
 # Testlarni ishga tushirish
 test:
 	go test ./... -v
+
+# Architecture testlar
+test-arch:
+	go test ./test/arch/ -v -count=1
+
+# E2E testlar (Docker kerak)
+test-e2e:
+	E2E=1 go test ./test/e2e/ -v -count=1 -timeout 300s
+
+# Integration testlar (Docker kerak)
+test-integration:
+	INTEGRATION=1 go test ./test/integration/... -v -count=1 -timeout 300s
+
+# Performance testlar (server ishlab turishi kerak)
+test-stress:
+	go test ./test/performance/ -v -run TestStress -count=1 -timeout 300s
+
+test-spike:
+	go test ./test/performance/ -v -run TestSpike -count=1 -timeout 300s
+
+test-endurance:
+	go test ./test/performance/ -v -run TestEndurance -count=1 -timeout 600s
+
+test-breakpoint:
+	go test ./test/performance/ -v -run TestBreakpoint -count=1 -timeout 300s
+
+test-perf-all:
+	go test ./test/performance/ -v -count=1 -timeout 600s
 
 # Benchmark testlar
 bench:
@@ -79,3 +107,30 @@ migrate-to:
 # Barcha migratsiyalarni qaytarish
 migrate-reset:
 	goose -dir $(MIGRATIONS_DIR) postgres "$(DATABASE_URL)" reset
+
+# ── Developer Tools ──────────────────────────────
+
+# Hot reload (go install github.com/air-verse/air@latest)
+dev:
+	air
+
+# Lint (go install github.com/golangci/golangci-lint/cmd/golangci-lint@latest)
+lint:
+	golangci-lint run ./...
+
+# Protobuf code generation
+protogen:
+	./scripts/protogen.sh
+
+# ── Security ─────────────────────────────────────
+
+# Go vulnerability scanner (go install golang.org/x/vuln/cmd/govulncheck@latest)
+vuln-check:
+	govulncheck ./...
+
+# Go module integrity verification
+mod-verify:
+	go mod verify
+
+# Full security audit: vulnerabilities + module integrity
+security-audit: mod-verify vuln-check

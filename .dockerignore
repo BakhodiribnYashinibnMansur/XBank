@@ -1,0 +1,41 @@
+# Build artifacts
+bin/
+tmp/
+
+# Git
+.git
+.gitignore
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Docs
+docs/
+*.md
+LICENSE
+
+# Tests
+test/
+tests/
+*_test.go
+.golangci.yml
+
+# Keys (NEVER include in Docker image)
+keys/
+
+# Config (injected at runtime)
+.env
+.env.*
+
+# Development tools
+.air.toml
+TODO.todo
+CLAUDE.md

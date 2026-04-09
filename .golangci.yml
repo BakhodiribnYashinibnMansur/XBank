@@ -1,0 +1,118 @@
+run:
+  timeout: 5m
+  modules-download-mode: readonly
+
+linters:
+  enable:
+    # --- Bug detection ---
+    - errcheck          # unchecked errors
+    - gosec             # security issues
+    - bodyclose         # unclosed HTTP response bodies
+    - nilerr            # returning nil after checking err != nil
+    - sqlclosecheck     # unclosed sql.Rows
+    - durationcheck     # suspicious time.Duration multiplications
+
+    # --- Code quality ---
+    - govet             # go vet checks
+    - staticcheck       # advanced static analysis
+    - ineffassign       # unused assignments
+    - unused            # unused code
+    - unconvert         # unnecessary type conversions
+    - unparam           # unused function parameters
+    - wastedassign      # useless value assignments
+
+    # --- Style ---
+    - gofmt             # formatting
+    - goimports         # import ordering
+    - misspell          # spelling mistakes
+    - whitespace        # unnecessary whitespace
+
+    # --- Complexity ---
+    - gocyclo           # cyclomatic complexity
+    - gocognit          # cognitive complexity
+    - nestif            # deeply nested ifs
+    - funlen            # function length
+
+    # --- Performance ---
+    - prealloc          # preallocate slice capacity
+    - gocritic          # opinionated Go code checks
+
+    # --- Error handling ---
+    - errorlint         # error wrapping checks
+    - wrapcheck         # ensure errors are wrapped
+
+linters-settings:
+  gocyclo:
+    min-complexity: 20
+
+  gocognit:
+    min-complexity: 30
+
+  funlen:
+    lines: 120
+    statements: 80
+
+  nestif:
+    min-complexity: 6
+
+  gocritic:
+    enabled-tags:
+      - diagnostic
+      - performance
+    disabled-checks:
+      - hugeParam  # DDD aggregates can be large structs
+
+  gosec:
+    excludes:
+      - G104  # unhandled errors (errcheck handles this)
+      - G304  # file path from variable (acceptable in config loading)
+
+  wrapcheck:
+    ignoreSigs:
+      - .Errorf(
+      - errors.New(
+      - errors.Unwrap(
+      - .Wrap(
+      - .Wrapf(
+      - .WithMessage(
+      - .WithMessagef(
+      - .WithStack(
+    ignorePackageGlobs:
+      - github.com/BakhodiribnYashinibnMansur/XBank/pkg/*
+      - github.com/BakhodiribnYashinibnMansur/XBank/internal/kernel/domain
+
+  errorlint:
+    errorf: true
+    asserts: true
+    comparison: true
+
+issues:
+  exclude-rules:
+    # Test files: relax rules
+    - path: _test\.go
+      linters:
+        - funlen
+        - gocyclo
+        - gocognit
+        - errcheck
+        - gosec
+        - wrapcheck
+        - bodyclose
+
+    # Migration SQL files embedded in Go
+    - path: migrations/
+      linters:
+        - all
+
+    # Generated code (protobuf, swagger)
+    - path: (docs/|proto/)
+      linters:
+        - all
+
+    # Domain layer can have long entity files
+    - path: domain/(entity|aggregate)\.go
+      linters:
+        - funlen
+
+  max-issues-per-linter: 50
+  max-same-issues: 5

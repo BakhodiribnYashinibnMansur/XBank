@@ -1,0 +1,23 @@
+root = "."
+tmp_dir = "tmp"
+
+[build]
+  cmd = "go build -o ./tmp/xbank ./cmd/app"
+  bin = "./tmp/xbank"
+  full_bin = "APP_ENV=development ./tmp/xbank"
+  include_ext = ["go", "yml", "yaml"]
+  exclude_dir = ["tmp", "vendor", "node_modules", "test", "tests", "docs", "keys", "bin"]
+  exclude_regex = ["_test\\.go$"]
+  delay = 1000 # ms
+
+[log]
+  time = false
+
+[color]
+  main = "cyan"
+  watcher = "magenta"
+  build = "yellow"
+  runner = "green"
+
+[misc]
+  clean_on_exit = true
