@@ -5,8 +5,13 @@ import (
 	"time"
 
 	"github.com/BakhodiribnYashinibnMansur/XBank/internal/kernel/domain"
-	"golang.org/x/crypto/bcrypt"
 )
+
+// PINHasher — domain port for PIN hashing (implemented in infrastructure).
+type PINHasher interface {
+	Hash(pin string) (string, error)
+	Compare(hashedPIN, pin string) error
+}
 
 var (
 	ErrCardNotFound        = domain.NewDomainError("CARD_NOT_FOUND", "card not found")
@@ -83,7 +88,7 @@ func NewCard(accountID string, cardType Type) (*Card, error) {
 }
 
 // Activate - activate the card by setting a PIN
-func (c *Card) Activate(pin string) error {
+func (c *Card) Activate(pin string, hasher PINHasher) error {
 	if c.Status != StatusInactive {
 		return domain.NewDomainError("CARD_VALIDATION", "only inactive cards can be activated")
 	}
@@ -92,19 +97,19 @@ func (c *Card) Activate(pin string) error {
 		return ErrInvalidPIN
 	}
 
-	hash, err := bcrypt.GenerateFromPassword([]byte(pin), bcrypt.DefaultCost)
+	hash, err := hasher.Hash(pin)
 	if err != nil {
 		return err
 	}
 
-	c.PINHash = string(hash)
+	c.PINHash = hash
 	c.Status = StatusActive
 	c.UpdatedAt = time.Now()
 	return nil
 }
 
 // VerifyPIN - check the PIN (with brute-force protection)
-func (c *Card) VerifyPIN(pin string) error {
+func (c *Card) VerifyPIN(pin string, hasher PINHasher) error {
 	if c.Status == StatusBlocked {
 		return ErrCardBlocked
 	}
@@ -113,7 +118,7 @@ func (c *Card) VerifyPIN(pin string) error {
 		return ErrPINAttemptsExceeded
 	}
 
-	if err := bcrypt.CompareHashAndPassword([]byte(c.PINHash), []byte(pin)); err != nil {
+	if err := hasher.Compare(c.PINHash, pin); err != nil {
 		c.PINAttempts++
 		if c.PINAttempts >= 3 {
 			c.Status = StatusBlocked
@@ -127,13 +132,13 @@ func (c *Card) VerifyPIN(pin string) error {
 	return nil
 }
 
-// ChangePin - change the card PIN (must verify old PIN first)
-func (c *Card) ChangePIN(oldPIN, newPIN string) error {
+// ChangePIN - change the card PIN (must verify old PIN first)
+func (c *Card) ChangePIN(oldPIN, newPIN string, hasher PINHasher) error {
 	if err := c.checkUsable(); err != nil {
 		return err
 	}
 
-	if err := c.VerifyPIN(oldPIN); err != nil {
+	if err := c.VerifyPIN(oldPIN, hasher); err != nil {
 		return err
 	}
 
@@ -141,12 +146,12 @@ func (c *Card) ChangePIN(oldPIN, newPIN string) error {
 		return ErrInvalidPIN
 	}
 
-	hash, err := bcrypt.GenerateFromPassword([]byte(newPIN), bcrypt.DefaultCost)
+	hash, err := hasher.Hash(newPIN)
 	if err != nil {
 		return err
 	}
 
-	c.PINHash = string(hash)
+	c.PINHash = hash
 	c.UpdatedAt = time.Now()
 	return nil
 }

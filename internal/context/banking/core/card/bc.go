@@ -2,6 +2,7 @@ package card
 
 import (
 	"github.com/BakhodiribnYashinibnMansur/XBank/internal/context/banking/core/card/application/command"
+	cardCrypto "github.com/BakhodiribnYashinibnMansur/XBank/internal/context/banking/core/card/infrastructure/crypto"
 	"github.com/BakhodiribnYashinibnMansur/XBank/internal/context/banking/core/card/infrastructure/postgres"
 	httpHandler "github.com/BakhodiribnYashinibnMansur/XBank/internal/context/banking/core/card/interfaces/http"
 	"github.com/BakhodiribnYashinibnMansur/XBank/internal/kernel/infrastructure/security/crypto"
@@ -27,7 +28,7 @@ func NewBoundedContext(
 	tokenRepo := postgres.NewTokenRepo(pool)
 	holdRepo := postgres.NewHoldRepo(pool)
 
-	svc := command.NewService(writeRepo, encryptor)
+	svc := command.NewService(writeRepo, cardCrypto.NewBcryptPINHasher(), encryptor)
 	tokenSvc := command.NewTokenService(tokenRepo, writeRepo, tokenizer)
 	holdSvc := command.NewHoldService(holdRepo, writeRepo)
 

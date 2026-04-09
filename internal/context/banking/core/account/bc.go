@@ -1,6 +1,7 @@
 package account
 
 import (
+	"github.com/BakhodiribnYashinibnMansur/XBank/internal/contract/ports"
 	"github.com/BakhodiribnYashinibnMansur/XBank/internal/context/banking/core/account/application/command"
 	accountDomain "github.com/BakhodiribnYashinibnMansur/XBank/internal/context/banking/core/account/domain"
 	"github.com/BakhodiribnYashinibnMansur/XBank/internal/context/banking/core/account/infrastructure/postgres"
@@ -12,9 +13,11 @@ import (
 
 // BoundedContext wires all Account BC components.
 type BoundedContext struct {
-	Handler *httpHandler.Handler
-	Service *command.Service
-	Repo    accountDomain.Repository // exposed for cross-BC use (transfer, reconciliation)
+	Handler      *httpHandler.Handler
+	Service      *command.Service
+	Repo         accountDomain.Repository // internal use within Account BC
+	TransferPort ports.AccountTransferPort // cross-BC port for Transfer BC
+	Reader       ports.AccountReader       // cross-BC port for Reconciliation BC
 }
 
 // NewBoundedContext creates the Account BC with all dependencies.
@@ -30,8 +33,10 @@ func NewBoundedContext(
 	svc := command.NewService(repo, eventRepo, txManager, publisher, topics, auditLog)
 
 	return &BoundedContext{
-		Handler: httpHandler.NewHandler(svc),
-		Service: svc,
-		Repo:    repo,
+		Handler:      httpHandler.NewHandler(svc),
+		Service:      svc,
+		Repo:         repo,
+		TransferPort: postgres.NewTransferPortAdapter(repo),
+		Reader:       postgres.NewReaderPortAdapter(pool),
 	}
 }

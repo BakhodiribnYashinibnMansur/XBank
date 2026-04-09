@@ -5,11 +5,12 @@ import (
 	"testing"
 
 	domainCard "github.com/BakhodiribnYashinibnMansur/XBank/internal/context/banking/core/card/domain"
+	cardCrypto "github.com/BakhodiribnYashinibnMansur/XBank/internal/context/banking/core/card/infrastructure/crypto"
 	"github.com/BakhodiribnYashinibnMansur/XBank/internal/kernel/infrastructure/mock"
 )
 
 func newTestService() *Service {
-	return NewService(mock.NewCardRepository(), nil) // nil = no encryption in tests
+	return NewService(mock.NewCardRepository(), cardCrypto.NewBcryptPINHasher(), nil)
 }
 
 func TestIssueCard(t *testing.T) {

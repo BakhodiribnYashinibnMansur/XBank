@@ -12,7 +12,6 @@ import (
 	"testing"
 	"time"
 
-	user "github.com/BakhodiribnYashinibnMansur/XBank/internal/context/iam/generic/user/domain"
 	infraAuth "github.com/BakhodiribnYashinibnMansur/XBank/internal/kernel/infrastructure/security/jwt"
 	"github.com/BakhodiribnYashinibnMansur/XBank/internal/kernel/infrastructure/mock"
 	"github.com/pquerna/otp/totp"
@@ -35,23 +34,18 @@ func newTestJWTService(t *testing.T) *infraAuth.JWTService {
 	return svc
 }
 
-func setupAuthTest(t *testing.T) (*Service, *mock.UserRepository) {
+func setupAuthTest(t *testing.T) (*Service, *mock.MockUserAuthReader) {
 	t.Helper()
-	userRepo := mock.NewUserRepository()
+	userAuth := mock.NewMockUserAuthReader()
 	sessionRepo := mock.NewSessionRepository()
 	jwtService := newTestJWTService(t)
-	svc := NewService(userRepo, sessionRepo, jwtService, nil, nil, nil) // nil = no TOTP, no Redis in tests
+	svc := NewService(userAuth, sessionRepo, jwtService, nil, nil, nil)
 
 	// Create a test user with hashed password
 	hashed, _ := bcrypt.GenerateFromPassword([]byte("password123"), bcrypt.DefaultCost)
-	userRepo.Create(context.Background(), &user.User{
-		Email:     "ali@example.com",
-		Password:  string(hashed),
-		FirstName: "Ali",
-		LastName:  "Valiyev",
-	})
+	userAuth.CreateRaw("ali@example.com", string(hashed), "Ali", "Valiyev")
 
-	return svc, userRepo
+	return svc, userAuth
 }
 
 func TestLogin_Success(t *testing.T) {
@@ -67,8 +61,8 @@ func TestLogin_Success(t *testing.T) {
 	if result.RefreshToken == "" {
 		t.Error("refresh token should not be empty")
 	}
-	if result.User.Email != "ali@example.com" {
-		t.Errorf("expected: ali@example.com, got: %s", result.User.Email)
+	if result.Email != "ali@example.com" {
+		t.Errorf("expected: ali@example.com, got: %s", result.Email)
 	}
 }
 
@@ -93,10 +87,8 @@ func TestLogin_NonExistentUser(t *testing.T) {
 func TestRefresh_Success(t *testing.T) {
 	svc, _ := setupAuthTest(t)
 
-	// Login first to get a refresh token
 	loginResult, _ := svc.Login(context.Background(), "ali@example.com", "password123", "TestAgent", "127.0.0.1")
 
-	// Refresh with the token
 	refreshResult, err := svc.Refresh(context.Background(), loginResult.RefreshToken, "TestAgent", "127.0.0.1")
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
@@ -104,7 +96,6 @@ func TestRefresh_Success(t *testing.T) {
 	if refreshResult.AccessToken == "" {
 		t.Error("new access token should not be empty")
 	}
-	// New token should be different (rotation)
 	if refreshResult.RefreshToken == loginResult.RefreshToken {
 		t.Error("refresh token should be rotated (new one each time)")
 	}
@@ -129,7 +120,6 @@ func TestLogout_Success(t *testing.T) {
 		t.Fatalf("unexpected error: %v", err)
 	}
 
-	// Refresh should fail after logout
 	_, err = svc.Refresh(context.Background(), loginResult.RefreshToken, "TestAgent", "127.0.0.1")
 	if err == nil {
 		t.Error("refresh should fail after logout")
@@ -138,30 +128,24 @@ func TestLogout_Success(t *testing.T) {
 
 // --- TOTP 2FA tests ---
 
-func setupAuthTestWithTOTP(t *testing.T) (*Service, *mock.UserRepository) {
+func setupAuthTestWithTOTP(t *testing.T) (*Service, *mock.MockUserAuthReader) {
 	t.Helper()
-	userRepo := mock.NewUserRepository()
+	userAuth := mock.NewMockUserAuthReader()
 	sessionRepo := mock.NewSessionRepository()
 	jwtService := newTestJWTService(t)
 	totpService := infraAuth.NewTOTPService("XBank-Test")
-	svc := NewService(userRepo, sessionRepo, jwtService, totpService, nil, nil)
+	svc := NewService(userAuth, sessionRepo, jwtService, totpService, nil, nil)
 
 	hashed, _ := bcrypt.GenerateFromPassword([]byte("password123"), bcrypt.MinCost)
-	userRepo.Create(context.Background(), &user.User{
-		Email:     "totp@example.com",
-		Password:  string(hashed),
-		FirstName: "TOTP",
-		LastName:  "User",
-	})
+	userAuth.CreateRaw("totp@example.com", string(hashed), "TOTP", "User")
 
-	return svc, userRepo
+	return svc, userAuth
 }
 
 func TestSetupTOTP_Success(t *testing.T) {
-	svc, userRepo := setupAuthTestWithTOTP(t)
+	svc, userAuth := setupAuthTestWithTOTP(t)
 
-	// Find user ID
-	u, _ := userRepo.GetByEmail(context.Background(), "totp@example.com")
+	u, _ := userAuth.GetInternalByEmail(context.Background(), "totp@example.com")
 
 	secret, url, err := svc.SetupTOTP(context.Background(), u.ID)
 	if err != nil {
@@ -174,8 +158,7 @@ func TestSetupTOTP_Success(t *testing.T) {
 		t.Error("URL should not be empty")
 	}
 
-	// Secret should be saved but TOTP not yet enabled
-	updated, _ := userRepo.GetByID(context.Background(), u.ID)
+	updated, _ := userAuth.GetInternalByID(context.Background(), u.ID)
 	if updated.TOTPSecret == "" {
 		t.Error("secret should be saved to user")
 	}
@@ -185,12 +168,11 @@ func TestSetupTOTP_Success(t *testing.T) {
 }
 
 func TestVerifyAndEnableTOTP_Success(t *testing.T) {
-	svc, userRepo := setupAuthTestWithTOTP(t)
-	u, _ := userRepo.GetByEmail(context.Background(), "totp@example.com")
+	svc, userAuth := setupAuthTestWithTOTP(t)
+	u, _ := userAuth.GetInternalByEmail(context.Background(), "totp@example.com")
 
 	secret, _, _ := svc.SetupTOTP(context.Background(), u.ID)
 
-	// Generate valid TOTP code
 	code, _ := totp.GenerateCode(secret, time.Now())
 
 	err := svc.VerifyAndEnableTOTP(context.Background(), u.ID, code)
@@ -198,15 +180,15 @@ func TestVerifyAndEnableTOTP_Success(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	updated, _ := userRepo.GetByID(context.Background(), u.ID)
+	updated, _ := userAuth.GetInternalByID(context.Background(), u.ID)
 	if !updated.TOTPEnabled {
 		t.Error("TOTP should be enabled after confirmation")
 	}
 }
 
 func TestVerifyAndEnableTOTP_WrongCode(t *testing.T) {
-	svc, userRepo := setupAuthTestWithTOTP(t)
-	u, _ := userRepo.GetByEmail(context.Background(), "totp@example.com")
+	svc, userAuth := setupAuthTestWithTOTP(t)
+	u, _ := userAuth.GetInternalByEmail(context.Background(), "totp@example.com")
 
 	svc.SetupTOTP(context.Background(), u.ID)
 
@@ -217,15 +199,13 @@ func TestVerifyAndEnableTOTP_WrongCode(t *testing.T) {
 }
 
 func TestLogin_TOTPRequired(t *testing.T) {
-	svc, userRepo := setupAuthTestWithTOTP(t)
-	u, _ := userRepo.GetByEmail(context.Background(), "totp@example.com")
+	svc, userAuth := setupAuthTestWithTOTP(t)
+	u, _ := userAuth.GetInternalByEmail(context.Background(), "totp@example.com")
 
-	// Setup and enable TOTP
 	secret, _, _ := svc.SetupTOTP(context.Background(), u.ID)
 	code, _ := totp.GenerateCode(secret, time.Now())
 	svc.VerifyAndEnableTOTP(context.Background(), u.ID, code)
 
-	// Login should return TOTPRequired
 	result, err := svc.Login(context.Background(), "totp@example.com", "password123", "Agent", "127.0.0.1")
 	if err != nil {
 		t.Fatal(err)
@@ -239,14 +219,13 @@ func TestLogin_TOTPRequired(t *testing.T) {
 }
 
 func TestLoginWithTOTP_Success(t *testing.T) {
-	svc, userRepo := setupAuthTestWithTOTP(t)
-	u, _ := userRepo.GetByEmail(context.Background(), "totp@example.com")
+	svc, userAuth := setupAuthTestWithTOTP(t)
+	u, _ := userAuth.GetInternalByEmail(context.Background(), "totp@example.com")
 
 	secret, _, _ := svc.SetupTOTP(context.Background(), u.ID)
 	code, _ := totp.GenerateCode(secret, time.Now())
 	svc.VerifyAndEnableTOTP(context.Background(), u.ID, code)
 
-	// Complete login with TOTP
 	code2, _ := totp.GenerateCode(secret, time.Now())
 	result, err := svc.LoginWithTOTP(context.Background(), "totp@example.com", code2, "Agent", "127.0.0.1")
 	if err != nil {
@@ -258,8 +237,8 @@ func TestLoginWithTOTP_Success(t *testing.T) {
 }
 
 func TestLoginWithTOTP_WrongCode(t *testing.T) {
-	svc, userRepo := setupAuthTestWithTOTP(t)
-	u, _ := userRepo.GetByEmail(context.Background(), "totp@example.com")
+	svc, userAuth := setupAuthTestWithTOTP(t)
+	u, _ := userAuth.GetInternalByEmail(context.Background(), "totp@example.com")
 
 	secret, _, _ := svc.SetupTOTP(context.Background(), u.ID)
 	code, _ := totp.GenerateCode(secret, time.Now())
@@ -272,28 +251,27 @@ func TestLoginWithTOTP_WrongCode(t *testing.T) {
 }
 
 func TestDisableTOTP_Success(t *testing.T) {
-	svc, userRepo := setupAuthTestWithTOTP(t)
-	u, _ := userRepo.GetByEmail(context.Background(), "totp@example.com")
+	svc, userAuth := setupAuthTestWithTOTP(t)
+	u, _ := userAuth.GetInternalByEmail(context.Background(), "totp@example.com")
 
 	secret, _, _ := svc.SetupTOTP(context.Background(), u.ID)
 	code, _ := totp.GenerateCode(secret, time.Now())
 	svc.VerifyAndEnableTOTP(context.Background(), u.ID, code)
 
-	// Disable with correct password
 	err := svc.DisableTOTP(context.Background(), u.ID, "password123")
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	updated, _ := userRepo.GetByID(context.Background(), u.ID)
+	updated, _ := userAuth.GetInternalByID(context.Background(), u.ID)
 	if updated.TOTPEnabled {
 		t.Error("TOTP should be disabled")
 	}
 }
 
 func TestDisableTOTP_WrongPassword(t *testing.T) {
-	svc, userRepo := setupAuthTestWithTOTP(t)
-	u, _ := userRepo.GetByEmail(context.Background(), "totp@example.com")
+	svc, userAuth := setupAuthTestWithTOTP(t)
+	u, _ := userAuth.GetInternalByEmail(context.Background(), "totp@example.com")
 
 	secret, _, _ := svc.SetupTOTP(context.Background(), u.ID)
 	code, _ := totp.GenerateCode(secret, time.Now())

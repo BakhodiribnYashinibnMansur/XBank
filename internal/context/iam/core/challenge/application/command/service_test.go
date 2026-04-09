@@ -7,22 +7,20 @@ import (
 	"time"
 
 	challenge "github.com/BakhodiribnYashinibnMansur/XBank/internal/context/iam/core/challenge/domain"
-	user "github.com/BakhodiribnYashinibnMansur/XBank/internal/context/iam/generic/user/domain"
 	"github.com/BakhodiribnYashinibnMansur/XBank/internal/kernel/infrastructure/mock"
 	"golang.org/x/crypto/bcrypt"
 )
 
-func setupTest(t *testing.T) (*Service, *mock.UserRepository, string) {
+func setupTest(t *testing.T) (*Service, *mock.MockUserAuthReader, string) {
 	t.Helper()
-	userRepo := mock.NewUserRepository()
+	userAuth := mock.NewMockUserAuthReader()
 	challengeRepo := newMemoryChallengeRepo()
 
 	hash, _ := bcrypt.GenerateFromPassword([]byte("password123"), bcrypt.MinCost)
-	u, _ := user.NewUser("test@test.com", string(hash), "Test", "User")
-	userRepo.Create(context.Background(), u)
+	userID := userAuth.CreateRaw("test@test.com", string(hash), "Test", "User")
 
-	svc := NewService(challengeRepo, userRepo, nil)
-	return svc, userRepo, u.ID
+	svc := NewService(challengeRepo, userAuth, nil)
+	return svc, userAuth, userID
 }
 
 func TestRequest_Success(t *testing.T) {

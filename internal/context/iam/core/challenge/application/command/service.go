@@ -4,8 +4,8 @@ import (
 	"context"
 	"time"
 
+	"github.com/BakhodiribnYashinibnMansur/XBank/internal/contract/ports"
 	challenge "github.com/BakhodiribnYashinibnMansur/XBank/internal/context/iam/core/challenge/domain"
-	user "github.com/BakhodiribnYashinibnMansur/XBank/internal/context/iam/generic/user/domain"
 	"github.com/BakhodiribnYashinibnMansur/XBank/internal/kernel/infrastructure/metrics"
 	infraRedis "github.com/BakhodiribnYashinibnMansur/XBank/internal/kernel/infrastructure/db/redis"
 	"github.com/BakhodiribnYashinibnMansur/XBank/pkg/apperror"
@@ -16,18 +16,18 @@ const maxPendingChallenges = 5
 
 type Service struct {
 	challengeRepo challenge.Repository
-	userRepo      user.Repository
+	userAuth      ports.UserAuthReader
 	cache         *infraRedis.ChallengeCache // nil = DB only
 }
 
 func NewService(
 	challengeRepo challenge.Repository,
-	userRepo user.Repository,
+	userAuth ports.UserAuthReader,
 	cache *infraRedis.ChallengeCache,
 ) *Service {
 	return &Service{
 		challengeRepo: challengeRepo,
-		userRepo:      userRepo,
+		userAuth:      userAuth,
 		cache:         cache,
 	}
 }
@@ -84,7 +84,7 @@ func (s *Service) Verify(ctx context.Context, challengeID, userID, password stri
 	}
 
 	// Verify password
-	u, err := s.userRepo.GetByID(ctx, userID)
+	u, err := s.userAuth.GetByID(ctx, userID)
 	if err != nil {
 		return nil, apperror.ErrUserNotFound
 	}

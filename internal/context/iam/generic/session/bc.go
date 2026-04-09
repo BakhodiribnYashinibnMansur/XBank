@@ -1,10 +1,10 @@
 package session
 
 import (
+	"github.com/BakhodiribnYashinibnMansur/XBank/internal/contract/ports"
 	"github.com/BakhodiribnYashinibnMansur/XBank/internal/context/iam/generic/session/application/command"
 	"github.com/BakhodiribnYashinibnMansur/XBank/internal/context/iam/generic/session/infrastructure/postgres"
 	httpHandler "github.com/BakhodiribnYashinibnMansur/XBank/internal/context/iam/generic/session/interfaces/http"
-	userDomain "github.com/BakhodiribnYashinibnMansur/XBank/internal/context/iam/generic/user/domain"
 	infraRedis "github.com/BakhodiribnYashinibnMansur/XBank/internal/kernel/infrastructure/db/redis"
 	infraAuth "github.com/BakhodiribnYashinibnMansur/XBank/internal/kernel/infrastructure/security/jwt"
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -19,14 +19,14 @@ type BoundedContext struct {
 // NewBoundedContext creates the Session BC with all dependencies.
 func NewBoundedContext(
 	pool *pgxpool.Pool,
-	userRepo userDomain.Repository,
+	userAuth ports.UserAuthReader,
 	jwtService *infraAuth.JWTService,
 	totpService *infraAuth.TOTPService,
 	sessionCache *infraRedis.SessionCache,
 	loginLimiter *infraRedis.LoginLimiter,
 ) *BoundedContext {
 	repo := postgres.NewWriteRepo(pool)
-	svc := command.NewService(userRepo, repo, jwtService, totpService, sessionCache, loginLimiter)
+	svc := command.NewService(userAuth, repo, jwtService, totpService, sessionCache, loginLimiter)
 
 	return &BoundedContext{
 		Handler: httpHandler.NewHandler(svc),

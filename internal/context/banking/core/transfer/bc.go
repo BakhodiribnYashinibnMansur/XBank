@@ -1,7 +1,7 @@
 package transfer
 
 import (
-	accountDomain "github.com/BakhodiribnYashinibnMansur/XBank/internal/context/banking/core/account/domain"
+	"github.com/BakhodiribnYashinibnMansur/XBank/internal/contract/ports"
 	"github.com/BakhodiribnYashinibnMansur/XBank/internal/context/banking/core/transfer/application/command"
 	"github.com/BakhodiribnYashinibnMansur/XBank/internal/context/banking/core/transfer/infrastructure/postgres"
 	httpHandler "github.com/BakhodiribnYashinibnMansur/XBank/internal/context/banking/core/transfer/interfaces/http"
@@ -21,7 +21,7 @@ type BoundedContext struct {
 // NewBoundedContext creates the Transfer BC with all dependencies.
 func NewBoundedContext(
 	pool *pgxpool.Pool,
-	accountRepo accountDomain.Repository,
+	accountPort ports.AccountTransferPort,
 	txManager domain.TxManager,
 	publisher domain.EventPublisher,
 	topics config.KafkaTopicsConfig,
@@ -30,7 +30,7 @@ func NewBoundedContext(
 	eventRepo := postgres.NewEventRepo(pool)
 	scheduledRepo := postgres.NewScheduledRepo(pool)
 
-	svc := command.NewService(writeRepo, eventRepo, accountRepo, txManager, publisher, topics)
+	svc := command.NewService(writeRepo, eventRepo, accountPort, txManager, publisher, topics)
 	schedSvc := command.NewScheduledService(scheduledRepo, svc)
 
 	return &BoundedContext{

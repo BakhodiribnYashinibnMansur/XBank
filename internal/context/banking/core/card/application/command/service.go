@@ -11,11 +11,12 @@ import (
 
 type Service struct {
 	repo      card.Repository
+	hasher    card.PINHasher
 	encryptor *crypto.AESEncryptor // nil = no encryption (dev mode)
 }
 
-func NewService(repo card.Repository, encryptor *crypto.AESEncryptor) *Service {
-	return &Service{repo: repo, encryptor: encryptor}
+func NewService(repo card.Repository, hasher card.PINHasher, encryptor *crypto.AESEncryptor) *Service {
+	return &Service{repo: repo, hasher: hasher, encryptor: encryptor}
 }
 
 // IssueCard - create a new card, encrypt PAN before saving
@@ -49,7 +50,7 @@ func (s *Service) Activate(ctx context.Context, cardID, pin string) (_ *card.Car
 	if err != nil {
 		return nil, err
 	}
-	if err := c.Activate(pin); err != nil {
+	if err := c.Activate(pin, s.hasher); err != nil {
 		return nil, err
 	}
 	if err := s.repo.Update(ctx, c); err != nil {
@@ -65,7 +66,7 @@ func (s *Service) VerifyPIN(ctx context.Context, cardID, pin string) (err error)
 	if err != nil {
 		return err
 	}
-	if err := c.VerifyPIN(pin); err != nil {
+	if err := c.VerifyPIN(pin, s.hasher); err != nil {
 		s.repo.Update(ctx, c)
 		return err
 	}
@@ -80,7 +81,7 @@ func (s *Service) ChangePIN(ctx context.Context, cardID, oldPIN, newPIN string) 
 	if err != nil {
 		return err
 	}
-	if err := c.ChangePIN(oldPIN, newPIN); err != nil {
+	if err := c.ChangePIN(oldPIN, newPIN, s.hasher); err != nil {
 		s.repo.Update(ctx, c)
 		return err
 	}

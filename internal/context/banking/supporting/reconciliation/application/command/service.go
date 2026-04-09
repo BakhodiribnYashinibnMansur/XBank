@@ -5,8 +5,7 @@ import (
 	"fmt"
 	"time"
 
-	account "github.com/BakhodiribnYashinibnMansur/XBank/internal/context/banking/core/account/domain"
-	ledger "github.com/BakhodiribnYashinibnMansur/XBank/internal/context/banking/core/ledger/domain"
+	"github.com/BakhodiribnYashinibnMansur/XBank/internal/contract/ports"
 	"github.com/BakhodiribnYashinibnMansur/XBank/internal/kernel/infrastructure/metrics"
 	"github.com/BakhodiribnYashinibnMansur/XBank/pkg/logger"
 	"go.uber.org/zap"
@@ -22,33 +21,33 @@ type Result struct {
 
 // Service - daily reconciliation checks
 type Service struct {
-	accountRepo account.Repository
-	ledgerRepo  ledger.Repository
+	accountReader ports.AccountReader
+	ledgerReader  ports.LedgerReader
 }
 
-func NewService(accountRepo account.Repository, ledgerRepo ledger.Repository) *Service {
-	return &Service{accountRepo: accountRepo, ledgerRepo: ledgerRepo}
+func NewService(accountReader ports.AccountReader, ledgerReader ports.LedgerReader) *Service {
+	return &Service{accountReader: accountReader, ledgerReader: ledgerReader}
 }
 
 // CheckAccount - verify account balance matches ledger sum
 func (s *Service) CheckAccount(ctx context.Context, accountID string) (_ *Result, err error) {
 	defer metrics.ObserveService("ReconciliationService", "CheckAccount", time.Now(), &err)
 
-	acc, err := s.accountRepo.GetByID(ctx, accountID)
+	acc, err := s.accountReader.GetByID(ctx, accountID)
 	if err != nil {
 		return nil, err
 	}
 
-	ledgerBalance, err := s.ledgerRepo.BalanceByAccountID(ctx, accountID)
+	ledgerBalance, err := s.ledgerReader.BalanceByAccountID(ctx, accountID)
 	if err != nil {
 		return nil, err
 	}
 
 	result := &Result{
 		AccountID:        accountID,
-		ProjectedBalance: acc.Balance.Amount,
+		ProjectedBalance: acc.Balance,
 		LedgerBalance:    ledgerBalance,
-		Match:            acc.Balance.Amount == ledgerBalance,
+		Match:            acc.Balance == ledgerBalance,
 	}
 
 	if !result.Match {
@@ -67,7 +66,7 @@ func (s *Service) CheckAccount(ctx context.Context, accountID string) (_ *Result
 func (s *Service) CheckAllAccounts(ctx context.Context, userID string) (_ []*Result, err error) {
 	defer metrics.ObserveService("ReconciliationService", "CheckAllAccounts", time.Now(), &err)
 
-	accounts, err := s.accountRepo.ListByUserID(ctx, userID, 1000, 0)
+	accounts, err := s.accountReader.ListByUserID(ctx, userID, 1000, 0)
 	if err != nil {
 		return nil, err
 	}

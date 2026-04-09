@@ -35,8 +35,8 @@ func (h *Handler) Login(c *fiber.Ctx) error {
 		return apperror.Success(c, http.StatusOK, AuthResponse{
 			TOTPRequired: true,
 			User: UserResponse{
-				ID:    result.User.ID,
-				Email: result.User.Email,
+				ID:    result.UserID,
+				Email: result.Email,
 			},
 		})
 	}
@@ -45,11 +45,8 @@ func (h *Handler) Login(c *fiber.Ctx) error {
 		AccessToken:  result.AccessToken,
 		RefreshToken: result.RefreshToken,
 		User: UserResponse{
-			ID:        result.User.ID,
-			Email:     result.User.Email,
-			FirstName: result.User.FirstName,
-			LastName:  result.User.LastName,
-			CreatedAt: result.User.CreatedAt,
+			ID:    result.UserID,
+			Email: result.Email,
 		},
 	})
 }
@@ -73,11 +70,8 @@ func (h *Handler) Refresh(c *fiber.Ctx) error {
 		AccessToken:  result.AccessToken,
 		RefreshToken: result.RefreshToken,
 		User: UserResponse{
-			ID:        result.User.ID,
-			Email:     result.User.Email,
-			FirstName: result.User.FirstName,
-			LastName:  result.User.LastName,
-			CreatedAt: result.User.CreatedAt,
+			ID:    result.UserID,
+			Email: result.Email,
 		},
 	})
 }
@@ -121,11 +115,8 @@ func (h *Handler) TOTPVerifyLogin(c *fiber.Ctx) error {
 		AccessToken:  result.AccessToken,
 		RefreshToken: result.RefreshToken,
 		User: UserResponse{
-			ID:        result.User.ID,
-			Email:     result.User.Email,
-			FirstName: result.User.FirstName,
-			LastName:  result.User.LastName,
-			CreatedAt: result.User.CreatedAt,
+			ID:    result.UserID,
+			Email: result.Email,
 		},
 	})
 }

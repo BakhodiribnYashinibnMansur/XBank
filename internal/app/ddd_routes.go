@@ -103,21 +103,29 @@ func registerPublicRoutes(v1 fiber.Router, bcs *DDDBoundedContexts) {
 	auth := v1.Group("/auth")
 
 	// Session BC — login, refresh, logout (public part)
-	auth.Post("/login", bcs.Session.Handler.Login)
-	auth.Post("/refresh", bcs.Session.Handler.Refresh)
-	auth.Post("/logout", bcs.Session.Handler.Logout)
-	auth.Post("/totp/verify", bcs.Session.Handler.TOTPVerifyLogin)
+	if bcs.Session != nil {
+		auth.Post("/login", bcs.Session.Handler.Login)
+		auth.Post("/refresh", bcs.Session.Handler.Refresh)
+		auth.Post("/logout", bcs.Session.Handler.Logout)
+		auth.Post("/totp/verify", bcs.Session.Handler.TOTPVerifyLogin)
+	}
 
 	// User BC — register
-	auth.Post("/register", bcs.User.Handler.Register)
+	if bcs.User != nil {
+		auth.Post("/register", bcs.User.Handler.Register)
+	}
 
 	// Exchange BC — public rate queries
-	currencies := v1.Group("/currencies")
-	currencies.Get("/rate", bcs.Exchange.Handler.GetRate)
-	currencies.Get("/rates", bcs.Exchange.Handler.ListRates)
+	if bcs.Exchange != nil {
+		currencies := v1.Group("/currencies")
+		currencies.Get("/rate", bcs.Exchange.Handler.GetRate)
+		currencies.Get("/rates", bcs.Exchange.Handler.ListRates)
+	}
 
 	// Announcement BC — public active announcements
-	v1.Get("/announcements/active", bcs.Announcement.Handler.ListActive)
+	if bcs.Announcement != nil {
+		v1.Get("/announcements/active", bcs.Announcement.Handler.ListActive)
+	}
 }
 
 // registerProtectedRoutes registers JWT-protected routes.
@@ -128,98 +136,104 @@ func registerProtectedRoutes(
 	redisClient *goredis.Client,
 	cfg *config.Config,
 ) {
-	// Session BC — logout-all, TOTP management
-	protected.Post("/auth/logout-all", bcs.Session.Handler.LogoutAll)
-	protected.Post("/auth/totp/setup", bcs.Session.Handler.TOTPSetup)
-	protected.Post("/auth/totp/confirm", bcs.Session.Handler.TOTPConfirmSetup)
-	protected.Post("/auth/totp/disable", bcs.Session.Handler.TOTPDisable)
-
-	// Challenge BC — step-up auth
-	bcs.Challenge.Handler.RegisterRoutes(protected)
-
-	// User BC
-	bcs.User.Handler.RegisterRoutes(protected)
-
-	// Account BC
-	bcs.Account.Handler.RegisterRoutes(protected)
+	if bcs.Session != nil {
+		protected.Post("/auth/logout-all", bcs.Session.Handler.LogoutAll)
+		protected.Post("/auth/totp/setup", bcs.Session.Handler.TOTPSetup)
+		protected.Post("/auth/totp/confirm", bcs.Session.Handler.TOTPConfirmSetup)
+		protected.Post("/auth/totp/disable", bcs.Session.Handler.TOTPDisable)
+	}
+	if bcs.Challenge != nil {
+		bcs.Challenge.Handler.RegisterRoutes(protected)
+	}
+	if bcs.User != nil {
+		bcs.User.Handler.RegisterRoutes(protected)
+	}
+	if bcs.Account != nil {
+		bcs.Account.Handler.RegisterRoutes(protected)
+	}
 
 	// Transfer BC (HMAC + idempotency)
-	hmacGroup := protected.Group("")
-	if hmacSigner != nil {
-		hmacGroup.Use(middleware.HMACMiddleware(hmacSigner))
+	if bcs.Transfer != nil {
+		hmacGroup := protected.Group("")
+		if hmacSigner != nil {
+			hmacGroup.Use(middleware.HMACMiddleware(hmacSigner))
+		}
+		if redisClient != nil {
+			hmacGroup.Use(middleware.IdempotencyMiddleware(redisClient, 24*time.Hour))
+		}
+		transferHTTP.RegisterRoutes(hmacGroup, bcs.Transfer.Handler, bcs.Transfer.ScheduledHandler)
 	}
-	if redisClient != nil {
-		hmacGroup.Use(middleware.IdempotencyMiddleware(redisClient, 24*time.Hour))
-	}
-	transferHTTP.RegisterRoutes(hmacGroup, bcs.Transfer.Handler, bcs.Transfer.ScheduledHandler)
 
 	// Card BC (HMAC)
-	cardHMACGroup := protected.Group("")
-	if hmacSigner != nil {
-		cardHMACGroup.Use(middleware.HMACMiddleware(hmacSigner))
+	if bcs.Card != nil {
+		cardHMACGroup := protected.Group("")
+		if hmacSigner != nil {
+			cardHMACGroup.Use(middleware.HMACMiddleware(hmacSigner))
+		}
+		bcs.Card.Handler.RegisterRoutes(cardHMACGroup)
+		bcs.Card.ExtendedHandler.RegisterRoutes(cardHMACGroup)
 	}
-	bcs.Card.Handler.RegisterRoutes(cardHMACGroup)
-	bcs.Card.ExtendedHandler.RegisterRoutes(cardHMACGroup)
-
-	// Beneficiary BC
-	bcs.Beneficiary.Handler.RegisterRoutes(protected)
-
-	// Contact BC
-	bcs.Contact.Handler.RegisterRoutes(protected)
-
-	// KYC BC (customer routes)
-	bcs.KYC.Handler.RegisterRoutes(protected)
-
-	// Notification BC (CQRS)
-	bcs.Notification.Handler.RegisterRoutes(protected)
-
-	// Exchange BC — protected convert
-	protected.Post("/currencies/convert", bcs.Exchange.Handler.Convert)
-
-	// Feature Flag BC — evaluate (public to authenticated users)
-	protected.Post("/flags/evaluate", bcs.FeatureFlag.Handler.Evaluate)
+	if bcs.Beneficiary != nil {
+		bcs.Beneficiary.Handler.RegisterRoutes(protected)
+	}
+	if bcs.Contact != nil {
+		bcs.Contact.Handler.RegisterRoutes(protected)
+	}
+	if bcs.KYC != nil {
+		bcs.KYC.Handler.RegisterRoutes(protected)
+	}
+	if bcs.Notification != nil {
+		bcs.Notification.Handler.RegisterRoutes(protected)
+	}
+	if bcs.Exchange != nil {
+		protected.Post("/currencies/convert", bcs.Exchange.Handler.Convert)
+	}
+	if bcs.FeatureFlag != nil {
+		protected.Post("/flags/evaluate", bcs.FeatureFlag.Handler.Evaluate)
+	}
 }
 
 // registerAdminRoutes registers admin-only routes.
 func registerAdminRoutes(admin fiber.Router, bcs *DDDBoundedContexts) {
-	// KYC BC — admin
-	bcs.KYC.Handler.RegisterAdminRoutes(admin)
-
-	// Fraud BC
-	bcs.Fraud.Handler.RegisterRoutes(admin)
-
-	// Reconciliation BC
-	bcs.Reconciliation.Handler.RegisterRoutes(admin)
-
-	// Authz BC — RBAC management
-	bcs.Authz.Handler.RegisterRoutes(admin)
-
-	// Audit BC
-	bcs.Audit.Handler.RegisterRoutes(admin)
-
-	// System Error BC
-	bcs.SystemError.Handler.RegisterRoutes(admin)
-
-	// Error Code BC
-	bcs.ErrorCode.Handler.RegisterRoutes(admin)
-
-	// Feature Flag BC — admin CRUD
-	bcs.FeatureFlag.Handler.RegisterAdminRoutes(admin)
-
-	// Site Setting BC
-	bcs.SiteSetting.Handler.RegisterRoutes(admin)
-
-	// Statistics BC
-	bcs.Statistics.Handler.RegisterRoutes(admin)
-
-	// Translation BC
-	bcs.Translation.Handler.RegisterRoutes(admin)
-
-	// Announcement BC — admin CRUD
-	bcs.Announcement.Handler.RegisterAdminRoutes(admin)
-
-	// Exchange BC — admin rate management
-	admin.Post("/currencies/rate", bcs.Exchange.Handler.UpsertRate)
+	if bcs.KYC != nil {
+		bcs.KYC.Handler.RegisterAdminRoutes(admin)
+	}
+	if bcs.Fraud != nil {
+		bcs.Fraud.Handler.RegisterRoutes(admin)
+	}
+	if bcs.Reconciliation != nil {
+		bcs.Reconciliation.Handler.RegisterRoutes(admin)
+	}
+	if bcs.Authz != nil {
+		bcs.Authz.Handler.RegisterRoutes(admin)
+	}
+	if bcs.Audit != nil {
+		bcs.Audit.Handler.RegisterRoutes(admin)
+	}
+	if bcs.SystemError != nil {
+		bcs.SystemError.Handler.RegisterRoutes(admin)
+	}
+	if bcs.ErrorCode != nil {
+		bcs.ErrorCode.Handler.RegisterRoutes(admin)
+	}
+	if bcs.FeatureFlag != nil {
+		bcs.FeatureFlag.Handler.RegisterAdminRoutes(admin)
+	}
+	if bcs.SiteSetting != nil {
+		bcs.SiteSetting.Handler.RegisterRoutes(admin)
+	}
+	if bcs.Statistics != nil {
+		bcs.Statistics.Handler.RegisterRoutes(admin)
+	}
+	if bcs.Translation != nil {
+		bcs.Translation.Handler.RegisterRoutes(admin)
+	}
+	if bcs.Announcement != nil {
+		bcs.Announcement.Handler.RegisterAdminRoutes(admin)
+	}
+	if bcs.Exchange != nil {
+		admin.Post("/currencies/rate", bcs.Exchange.Handler.UpsertRate)
+	}
 }
 
 // sseStreamHandler returns a Fiber handler for SSE notification streaming.

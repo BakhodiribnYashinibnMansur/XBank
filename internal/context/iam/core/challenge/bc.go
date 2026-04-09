@@ -1,10 +1,10 @@
 package challenge
 
 import (
+	"github.com/BakhodiribnYashinibnMansur/XBank/internal/contract/ports"
 	"github.com/BakhodiribnYashinibnMansur/XBank/internal/context/iam/core/challenge/application/command"
 	"github.com/BakhodiribnYashinibnMansur/XBank/internal/context/iam/core/challenge/infrastructure/postgres"
 	httpHandler "github.com/BakhodiribnYashinibnMansur/XBank/internal/context/iam/core/challenge/interfaces/http"
-	userDomain "github.com/BakhodiribnYashinibnMansur/XBank/internal/context/iam/generic/user/domain"
 	infraRedis "github.com/BakhodiribnYashinibnMansur/XBank/internal/kernel/infrastructure/db/redis"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
@@ -18,11 +18,11 @@ type BoundedContext struct {
 // NewBoundedContext creates the Challenge BC with all dependencies.
 func NewBoundedContext(
 	pool *pgxpool.Pool,
-	userRepo userDomain.Repository,
+	userAuth ports.UserAuthReader,
 	cache *infraRedis.ChallengeCache,
 ) *BoundedContext {
 	repo := postgres.NewWriteRepo(pool)
-	svc := command.NewService(repo, userRepo, cache)
+	svc := command.NewService(repo, userAuth, cache)
 
 	return &BoundedContext{
 		Handler: httpHandler.NewHandler(svc),

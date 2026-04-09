@@ -4,11 +4,12 @@ import (
 	"context"
 	"time"
 
-	account "github.com/BakhodiribnYashinibnMansur/XBank/internal/context/banking/core/account/domain"
-	"github.com/BakhodiribnYashinibnMansur/XBank/internal/kernel/domain"
+	"github.com/BakhodiribnYashinibnMansur/XBank/internal/contract/ports"
 	transfer "github.com/BakhodiribnYashinibnMansur/XBank/internal/context/banking/core/transfer/domain"
+	"github.com/BakhodiribnYashinibnMansur/XBank/internal/kernel/domain"
 	"github.com/BakhodiribnYashinibnMansur/XBank/internal/kernel/infrastructure/config"
 	"github.com/BakhodiribnYashinibnMansur/XBank/internal/kernel/infrastructure/metrics"
+	"github.com/BakhodiribnYashinibnMansur/XBank/internal/kernel/outbox"
 	commonpb "github.com/BakhodiribnYashinibnMansur/XBank/proto/common"
 	transferpb "github.com/BakhodiribnYashinibnMansur/XBank/proto/transfers"
 	"github.com/google/uuid"
@@ -19,7 +20,7 @@ import (
 type Service struct {
 	transferRepo transfer.Repository
 	eventRepo    transfer.EventRepository
-	accountRepo  account.Repository
+	accountPort  ports.AccountTransferPort
 	txManager    domain.TxManager
 	publisher    domain.EventPublisher
 	topics       config.KafkaTopicsConfig
@@ -28,7 +29,7 @@ type Service struct {
 func NewService(
 	transferRepo transfer.Repository,
 	eventRepo transfer.EventRepository,
-	accountRepo account.Repository,
+	accountPort ports.AccountTransferPort,
 	txManager domain.TxManager,
 	publisher domain.EventPublisher,
 	topics config.KafkaTopicsConfig,
@@ -36,7 +37,7 @@ func NewService(
 	return &Service{
 		transferRepo: transferRepo,
 		eventRepo:    eventRepo,
-		accountRepo:  accountRepo,
+		accountPort:  accountPort,
 		txManager:    txManager,
 		publisher:    publisher,
 		topics:       topics,
@@ -58,72 +59,34 @@ func (s *Service) Send(ctx context.Context, fromAccountID, toAccountID string, a
 	}
 
 	err = s.txManager.WithSerializableTx(ctx, func(txCtx context.Context) error {
-		// Deadlock prevention: lock the smaller ID first
-		firstID, secondID := fromAccountID, toAccountID
-		if firstID > secondID {
-			firstID, secondID = secondID, firstID
-		}
-
-		first, err := s.accountRepo.GetByIDForUpdate(txCtx, firstID)
-		if err != nil {
-			return account.ErrAccountNotFound
-		}
-
-		second, err := s.accountRepo.GetByIDForUpdate(txCtx, secondID)
-		if err != nil {
-			return account.ErrAccountNotFound
-		}
-
-		// Map back to from/to
-		var fromAcc, toAcc *account.Account
-		if firstID == fromAccountID {
-			fromAcc, toAcc = first, second
-		} else {
-			fromAcc, toAcc = second, first
-		}
-
-		// Currency validation
-		if fromAcc.Balance.Currency != currency || toAcc.Balance.Currency != currency {
-			return domain.ErrCurrencyMismatch
-		}
-
-		// Domain operations (checks active status, sufficient funds, etc.)
-		if err := fromAcc.Withdraw(money); err != nil {
-			return err
-		}
-		if err := toAcc.Deposit(money); err != nil {
-			return err
-		}
-
-		// Persist account changes
-		if err := s.accountRepo.Update(txCtx, fromAcc); err != nil {
-			return err
-		}
-		if err := s.accountRepo.Update(txCtx, toAcc); err != nil {
+		// Delegate account debit/credit to the Account BC via port
+		if err := s.accountPort.TransferFunds(txCtx, fromAccountID, toAccountID, amount, string(currency)); err != nil {
 			return err
 		}
 
 		// Complete transfer and persist events + read projection
 		tr.Complete()
-		if err := s.eventRepo.Append(txCtx, tr.ID, 0, tr.UncommittedEvents()); err != nil {
+		if err := s.eventRepo.Append(txCtx, tr.ID, tr.UncommittedEvents()); err != nil {
 			return err
 		}
 		if err := s.transferRepo.Create(txCtx, tr); err != nil {
 			return err
 		}
 		tr.ClearUncommittedEvents()
+
+		// Outbox: publish within the same transaction
+		txCtx = outbox.WithOutboxMeta(txCtx, "Transfer", tr.ID)
+		s.publishTransferCompleted(txCtx, tr)
 		return nil
 	})
 
 	if err != nil {
 		tr.Fail(err.Error())
 		metrics.TransfersTotal.WithLabelValues("failed").Inc()
-		s.publishTransferFailed(ctx, tr, err.Error())
 		return tr, err
 	}
 
 	metrics.TransfersTotal.WithLabelValues("completed").Inc()
-	s.publishTransferCompleted(ctx, tr)
 	return tr, nil
 }
 
@@ -162,7 +125,7 @@ func (s *Service) GetHistory(ctx context.Context, transferID string) (_ []transf
 	return events, nil
 }
 
-// --- Kafka publish helpers (best-effort, after DB commit) ---
+// --- Kafka publish helpers (outbox: called within DB transaction) ---
 
 func newMetadata() *commonpb.Metadata {
 	return &commonpb.Metadata{

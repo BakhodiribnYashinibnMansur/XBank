@@ -107,10 +107,10 @@ func NewDDDBoundedContexts(
 ) *DDDBoundedContexts {
 	// IAM — Generic
 	userBC := user.NewBoundedContext(pool)
-	sessionBC := session.NewBoundedContext(pool, userBC.Repo, jwtService, totpService, sessionCache, loginLimiter)
+	sessionBC := session.NewBoundedContext(pool, userBC.AuthPort, jwtService, totpService, sessionCache, loginLimiter)
 
 	// IAM — Core
-	challengeBC := challenge.NewBoundedContext(pool, userBC.Repo, challengeCache)
+	challengeBC := challenge.NewBoundedContext(pool, userBC.AuthPort, challengeCache)
 
 	// IAM — Generic (authz)
 	authzBC := authz.NewBoundedContext(pool)
@@ -122,7 +122,7 @@ func NewDDDBoundedContexts(
 	// Banking — Core
 	ledgerBC := ledger.NewBoundedContext(pool)
 	accountBC := account.NewBoundedContext(pool, txManager, publisher, cfg.Kafka.Topics, auditLog)
-	transferBC := transfer.NewBoundedContext(pool, accountBC.Repo, txManager, publisher, cfg.Kafka.Topics)
+	transferBC := transfer.NewBoundedContext(pool, accountBC.TransferPort, txManager, publisher, cfg.Kafka.Topics)
 	cardBC := card.NewBoundedContext(pool, cardEncryptor, tokenizer)
 
 	// Banking — Supporting
@@ -130,7 +130,7 @@ func NewDDDBoundedContexts(
 	exchangeBC := exchange.NewBoundedContext(pool)
 	kycBC := kyc.NewBoundedContext(pool)
 	fraudBC := fraud.NewBoundedContext(pool)
-	reconBC := reconciliation.NewBoundedContext(accountBC.Repo, ledgerBC.Repo)
+	reconBC := reconciliation.NewBoundedContext(accountBC.Reader, ledgerBC.Reader)
 
 	// Admin
 	featureFlagBC := featureflag.NewBoundedContext(pool, eventBus)

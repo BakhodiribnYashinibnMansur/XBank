@@ -5,8 +5,8 @@ import (
 	"encoding/json"
 	"time"
 
+	"github.com/BakhodiribnYashinibnMansur/XBank/internal/contract/ports"
 	session "github.com/BakhodiribnYashinibnMansur/XBank/internal/context/iam/generic/session/domain"
-	user "github.com/BakhodiribnYashinibnMansur/XBank/internal/context/iam/generic/user/domain"
 	infraAuth "github.com/BakhodiribnYashinibnMansur/XBank/internal/kernel/infrastructure/security/jwt"
 	"github.com/BakhodiribnYashinibnMansur/XBank/internal/kernel/infrastructure/metrics"
 	infraRedis "github.com/BakhodiribnYashinibnMansur/XBank/internal/kernel/infrastructure/db/redis"
@@ -20,7 +20,7 @@ var (
 )
 
 type Service struct {
-	userRepo     user.Repository
+	userAuth     ports.UserAuthReader
 	sessionRepo  session.Repository    // DB (audit)
 	jwtService   *infraAuth.JWTService
 	totpService  *infraAuth.TOTPService   // nil = TOTP disabled globally
@@ -29,7 +29,7 @@ type Service struct {
 }
 
 func NewService(
-	userRepo user.Repository,
+	userAuth ports.UserAuthReader,
 	sessionRepo session.Repository,
 	jwtService *infraAuth.JWTService,
 	totpService *infraAuth.TOTPService,
@@ -37,7 +37,7 @@ func NewService(
 	loginLimiter *infraRedis.LoginLimiter,
 ) *Service {
 	return &Service{
-		userRepo:     userRepo,
+		userAuth:     userAuth,
 		sessionRepo:  sessionRepo,
 		jwtService:   jwtService,
 		totpService:  totpService,
@@ -49,7 +49,9 @@ func NewService(
 type LoginResult struct {
 	AccessToken  string
 	RefreshToken string
-	User         *user.User
+	UserID       string
+	Email        string
+	Role         string
 	TOTPRequired bool   // true = client must call /auth/totp/verify
 }
 
@@ -67,7 +69,7 @@ func (s *Service) Login(ctx context.Context, email, password, userAgent, ipAddre
 	}
 
 	// 1. Find user
-	u, err := s.userRepo.GetByEmail(ctx, email)
+	u, err := s.userAuth.GetByEmail(ctx, email)
 	if err != nil {
 		s.recordLoginFailure(ctx, email)
 		return nil, ErrInvalidCredentials
@@ -86,13 +88,15 @@ func (s *Service) Login(ctx context.Context, email, password, userAgent, ipAddre
 		}
 		metrics.LoginsTotal.WithLabelValues("totp_pending").Inc()
 		return &LoginResult{
-			User:         u,
+			UserID:       u.ID,
+			Email:        u.Email,
+			Role:         u.Role,
 			TOTPRequired: true,
 		}, nil
 	}
 
 	// 3. Generate tokens
-	tokenPair, err := s.jwtService.GenerateTokenPair(u.ID, u.Email, string(u.Role), ipAddress)
+	tokenPair, err := s.jwtService.GenerateTokenPair(u.ID, u.Email, u.Role, ipAddress)
 	if err != nil {
 		return nil, err
 	}
@@ -121,7 +125,9 @@ func (s *Service) Login(ctx context.Context, email, password, userAgent, ipAddre
 	return &LoginResult{
 		AccessToken:  tokenPair.AccessToken,
 		RefreshToken: tokenPair.RefreshToken,
-		User:         u,
+		UserID:       u.ID,
+		Email:        u.Email,
+		Role:         u.Role,
 	}, nil
 }
 
@@ -130,7 +136,7 @@ func (s *Service) Login(ctx context.Context, email, password, userAgent, ipAddre
 func (s *Service) LoginWithTOTP(ctx context.Context, email, code, userAgent, ipAddress string) (_ *LoginResult, err error) {
 	defer metrics.ObserveService("AuthService", "LoginWithTOTP", time.Now(), &err)
 
-	u, err := s.userRepo.GetByEmail(ctx, email)
+	u, err := s.userAuth.GetByEmail(ctx, email)
 	if err != nil {
 		return nil, ErrInvalidCredentials
 	}
@@ -146,7 +152,7 @@ func (s *Service) LoginWithTOTP(ctx context.Context, email, code, userAgent, ipA
 	}
 
 	// TOTP valid — issue tokens
-	tokenPair, err := s.jwtService.GenerateTokenPair(u.ID, u.Email, string(u.Role), ipAddress)
+	tokenPair, err := s.jwtService.GenerateTokenPair(u.ID, u.Email, u.Role, ipAddress)
 	if err != nil {
 		return nil, err
 	}
@@ -167,7 +173,9 @@ func (s *Service) LoginWithTOTP(ctx context.Context, email, code, userAgent, ipA
 	return &LoginResult{
 		AccessToken:  tokenPair.AccessToken,
 		RefreshToken: tokenPair.RefreshToken,
-		User:         u,
+		UserID:       u.ID,
+		Email:        u.Email,
+		Role:         u.Role,
 	}, nil
 }
 
@@ -179,7 +187,7 @@ func (s *Service) SetupTOTP(ctx context.Context, userID string) (secret, url str
 		return "", "", apperror.ErrInternal.WithMessage("TOTP not configured")
 	}
 
-	u, err := s.userRepo.GetByID(ctx, userID)
+	u, err := s.userAuth.GetByID(ctx, userID)
 	if err != nil {
 		return "", "", err
 	}
@@ -193,7 +201,7 @@ func (s *Service) SetupTOTP(ctx context.Context, userID string) (secret, url str
 	}
 
 	// Save secret but don't enable yet — user must verify first
-	if err := s.userRepo.UpdateTOTP(ctx, userID, secret, false, nil); err != nil {
+	if err := s.userAuth.UpdateTOTP(ctx, userID, secret, false, nil); err != nil {
 		return "", "", apperror.ErrInternal.Wrap(err)
 	}
 
@@ -204,7 +212,7 @@ func (s *Service) SetupTOTP(ctx context.Context, userID string) (secret, url str
 func (s *Service) VerifyAndEnableTOTP(ctx context.Context, userID, code string) (err error) {
 	defer metrics.ObserveService("AuthService", "VerifyAndEnableTOTP", time.Now(), &err)
 
-	u, err := s.userRepo.GetByID(ctx, userID)
+	u, err := s.userAuth.GetByID(ctx, userID)
 	if err != nil {
 		return err
 	}
@@ -220,14 +228,14 @@ func (s *Service) VerifyAndEnableTOTP(ctx context.Context, userID, code string) 
 	}
 
 	now := time.Now()
-	return s.userRepo.UpdateTOTP(ctx, userID, u.TOTPSecret, true, &now)
+	return s.userAuth.UpdateTOTP(ctx, userID, u.TOTPSecret, true, &now)
 }
 
 // DisableTOTP - turn off 2FA (requires password confirmation)
 func (s *Service) DisableTOTP(ctx context.Context, userID, password string) (err error) {
 	defer metrics.ObserveService("AuthService", "DisableTOTP", time.Now(), &err)
 
-	u, err := s.userRepo.GetByID(ctx, userID)
+	u, err := s.userAuth.GetByID(ctx, userID)
 	if err != nil {
 		return err
 	}
@@ -236,7 +244,7 @@ func (s *Service) DisableTOTP(ctx context.Context, userID, password string) (err
 		return ErrInvalidCredentials
 	}
 
-	return s.userRepo.UpdateTOTP(ctx, userID, "", false, nil)
+	return s.userAuth.UpdateTOTP(ctx, userID, "", false, nil)
 }
 
 // Refresh - obtain new token pair
@@ -261,13 +269,13 @@ func (s *Service) Refresh(ctx context.Context, refreshToken, userAgent, ipAddres
 	s.deleteSession(ctx, sess.ID, refreshTokenHash)
 
 	// 4. Get user
-	u, err := s.userRepo.GetByID(ctx, sess.UserID)
+	u, err := s.userAuth.GetByID(ctx, sess.UserID)
 	if err != nil {
 		return nil, err
 	}
 
 	// 5. New tokens
-	tokenPair, err := s.jwtService.GenerateTokenPair(u.ID, u.Email, string(u.Role), ipAddress)
+	tokenPair, err := s.jwtService.GenerateTokenPair(u.ID, u.Email, u.Role, ipAddress)
 	if err != nil {
 		return nil, err
 	}
@@ -288,7 +296,9 @@ func (s *Service) Refresh(ctx context.Context, refreshToken, userAgent, ipAddres
 	return &LoginResult{
 		AccessToken:  tokenPair.AccessToken,
 		RefreshToken: tokenPair.RefreshToken,
-		User:         u,
+		UserID:       u.ID,
+		Email:        u.Email,
+		Role:         u.Role,
 	}, nil
 }
 
