@@ -1,0 +1,31 @@
+syntax = "proto3";
+
+package xbank.kyc;
+
+option go_package = "github.com/BakhodiribnYashinibnMansur/XBank/proto/kyc";
+
+import "common/metadata.proto";
+
+// KYCSubmitted - published when a KYC verification is submitted
+message KYCSubmitted {
+  xbank.common.Metadata metadata = 1;
+  string verification_id = 2;
+  string user_id         = 3;
+  string document_type   = 4;
+}
+
+// KYCApproved - published when a KYC verification is approved
+message KYCApproved {
+  xbank.common.Metadata metadata = 1;
+  string verification_id = 2;
+  string user_id         = 3;
+  string level           = 4;
+}
+
+// KYCRejected - published when a KYC verification is rejected
+message KYCRejected {
+  xbank.common.Metadata metadata = 1;
+  string verification_id = 2;
+  string user_id         = 3;
+  string reason          = 4;
+}

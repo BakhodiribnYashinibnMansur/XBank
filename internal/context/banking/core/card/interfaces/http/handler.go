@@ -150,7 +150,15 @@ func (h *Handler) ChangePIN(c *fiber.Ctx) error {
 func (h *Handler) Block(c *fiber.Ctx) error {
 	cardID := c.Params("id")
 
-	if err := h.service.Block(c.Context(), cardID); err != nil {
+	var body struct {
+		Reason string `json:"reason"`
+	}
+	_ = c.BodyParser(&body)
+	if body.Reason == "" {
+		body.Reason = "blocked by user"
+	}
+
+	if err := h.service.Block(c.Context(), cardID, body.Reason); err != nil {
 		return err
 	}
 	return apperror.Success(c, http.StatusOK, fiber.Map{"message": "Card blocked"})

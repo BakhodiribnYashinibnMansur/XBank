@@ -218,6 +218,17 @@ func expectStatus(t *testing.T, rec *httptest.ResponseRecorder, want int) {
 	}
 }
 
+// expectStatusOneOf asserts the response status code is one of the acceptable codes.
+func expectStatusOneOf(t *testing.T, rec *httptest.ResponseRecorder, codes ...int) {
+	t.Helper()
+	for _, c := range codes {
+		if rec.Code == c {
+			return
+		}
+	}
+	t.Fatalf("status = %d, want one of %v\nbody: %s", rec.Code, codes, rec.Body.String())
+}
+
 // authTokens holds the result of a login.
 type authTokens struct {
 	AccessToken  string `json:"access_token"`
@@ -256,4 +267,82 @@ func registerAndLogin(t *testing.T, email, password, firstName string) authToken
 		t.Fatal("expected access token after login")
 	}
 	return tokens
+}
+
+// createAccountWithDeposit creates an account and deposits funds, returning the account ID.
+func createAccountWithDeposit(t *testing.T, token string, currency string, amount int64) string {
+	t.Helper()
+
+	rec := doRequest(t, fiber.MethodPost, "/api/v1/accounts/create", map[string]string{
+		"currency": currency,
+	}, token)
+	expectStatus(t, rec, fiber.StatusCreated)
+
+	var acc struct {
+		ID string `json:"id"`
+	}
+	parseResponse(t, rec, &acc)
+
+	if acc.ID == "" {
+		t.Fatal("expected account ID")
+	}
+
+	if amount > 0 {
+		rec = doRequest(t, fiber.MethodPost, "/api/v1/accounts/deposit", map[string]interface{}{
+			"account_id": acc.ID,
+			"amount":     amount,
+		}, token)
+		expectStatus(t, rec, fiber.StatusOK)
+	}
+
+	return acc.ID
+}
+
+// getAccountBalance fetches the current balance for an account.
+func getAccountBalance(t *testing.T, token, accountID string) int64 {
+	t.Helper()
+
+	rec := doRequest(t, fiber.MethodGet, "/api/v1/accounts/get?id="+accountID, nil, token)
+	expectStatus(t, rec, fiber.StatusOK)
+
+	var acc struct {
+		Balance int64 `json:"balance"`
+	}
+	parseResponse(t, rec, &acc)
+	return acc.Balance
+}
+
+// issueAndActivateCard creates an account, issues a card, activates it with PIN, returns card ID and account ID.
+func issueAndActivateCard(t *testing.T, token, currency, cardType, pin string) (string, string) {
+	t.Helper()
+
+	accountID := createAccountWithDeposit(t, token, currency, 0)
+
+	rec := doHMACRequest(t, fiber.MethodPost, "/api/v1/cards", map[string]string{
+		"account_id": accountID,
+		"card_type":  cardType,
+	}, token)
+	expectStatus(t, rec, fiber.StatusCreated)
+
+	var card struct {
+		ID string `json:"id"`
+	}
+	parseResponse(t, rec, &card)
+
+	if card.ID == "" {
+		t.Fatal("expected card ID")
+	}
+
+	// Activate
+	rec = doHMACRequest(t, fiber.MethodPost, "/api/v1/cards/"+card.ID+"/activate", map[string]string{
+		"pin": pin,
+	}, token)
+	expectStatus(t, rec, fiber.StatusOK)
+
+	return card.ID, accountID
+}
+
+// uniqueEmail generates a unique email for test isolation.
+func uniqueEmail(prefix string) string {
+	return fmt.Sprintf("%s-%d@example.com", prefix, time.Now().UnixNano())
 }

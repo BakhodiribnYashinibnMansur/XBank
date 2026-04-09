@@ -77,14 +77,21 @@ type KafkaConfig struct {
 }
 
 type KafkaTopicsConfig struct {
-	AccountOpened     string `mapstructure:"account_opened"`
-	AccountCredited   string `mapstructure:"account_credited"`
-	AccountDebited    string `mapstructure:"account_debited"`
-	AccountFrozen     string `mapstructure:"account_frozen"`
-	AccountClosed     string `mapstructure:"account_closed"`
-	TransferCreated   string `mapstructure:"transfer_created"`
-	TransferCompleted string `mapstructure:"transfer_completed"`
-	TransferFailed    string `mapstructure:"transfer_failed"`
+	AccountOpened         string `mapstructure:"account_opened"`
+	AccountCredited       string `mapstructure:"account_credited"`
+	AccountDebited        string `mapstructure:"account_debited"`
+	AccountFrozen         string `mapstructure:"account_frozen"`
+	AccountClosed         string `mapstructure:"account_closed"`
+	TransferCreated       string `mapstructure:"transfer_created"`
+	TransferCompleted     string `mapstructure:"transfer_completed"`
+	TransferFailed        string `mapstructure:"transfer_failed"`
+	CardIssued            string `mapstructure:"card_issued"`
+	CardBlocked           string `mapstructure:"card_blocked"`
+	CardActivated         string `mapstructure:"card_activated"`
+	KYCSubmitted          string `mapstructure:"kyc_submitted"`
+	KYCApproved           string `mapstructure:"kyc_approved"`
+	KYCRejected           string `mapstructure:"kyc_rejected"`
+	NotificationRequested string `mapstructure:"notification_requested"`
 }
 
 type MongoDBConfig struct {

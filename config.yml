@@ -41,3 +41,10 @@ kafka:
     transfer_created: xbank.transfers.created
     transfer_completed: xbank.transfers.completed
     transfer_failed: xbank.transfers.failed
+    card_issued: xbank.cards.issued
+    card_blocked: xbank.cards.blocked
+    card_activated: xbank.cards.activated
+    kyc_submitted: xbank.kyc.submitted
+    kyc_approved: xbank.kyc.approved
+    kyc_rejected: xbank.kyc.rejected
+    notification_requested: xbank.notifications.requested

@@ -137,12 +137,12 @@ func NewDDDBoundedContexts(
 	ledgerBC := ledger.NewBoundedContext(pool)
 	accountBC := account.NewBoundedContext(pool, txManager, publisher, cfg.Kafka.Topics, auditLog)
 	transferBC := transfer.NewBoundedContext(pool, accountBC.TransferPort, txManager, publisher, cfg.Kafka.Topics)
-	cardBC := card.NewBoundedContext(pool, cardEncryptor, tokenizer)
+	cardBC := card.NewBoundedContext(pool, cardEncryptor, tokenizer, publisher, cfg.Kafka.Topics)
 
 	// Banking — Supporting
 	beneficiaryBC := beneficiary.NewBoundedContext(pool)
 	exchangeBC := exchange.NewBoundedContext(pool)
-	kycBC := kyc.NewBoundedContext(pool)
+	kycBC := kyc.NewBoundedContext(pool, publisher, cfg.Kafka.Topics)
 	fraudBC := fraud.NewBoundedContext(pool)
 	reconBC := reconciliation.NewBoundedContext(accountBC.Reader, ledgerBC.Reader)
 

@@ -6,11 +6,12 @@ import (
 
 	domainCard "github.com/BakhodiribnYashinibnMansur/XBank/internal/context/banking/core/card/domain"
 	cardCrypto "github.com/BakhodiribnYashinibnMansur/XBank/internal/context/banking/core/card/infrastructure/crypto"
+	"github.com/BakhodiribnYashinibnMansur/XBank/internal/kernel/infrastructure/config"
 	"github.com/BakhodiribnYashinibnMansur/XBank/internal/kernel/infrastructure/mock"
 )
 
 func newTestService() *Service {
-	return NewService(mock.NewCardRepository(), cardCrypto.NewBcryptPINHasher(), nil)
+	return NewService(mock.NewCardRepository(), cardCrypto.NewBcryptPINHasher(), nil, nil, config.KafkaTopicsConfig{})
 }
 
 func TestIssueCard(t *testing.T) {
@@ -103,7 +104,7 @@ func TestBlock_Unblock(t *testing.T) {
 	c, _ := svc.IssueCard(context.Background(), "acc-123", domainCard.TypeDebit)
 	svc.Activate(context.Background(), c.ID, "1234")
 
-	svc.Block(context.Background(), c.ID)
+	svc.Block(context.Background(), c.ID, "test block")
 	found, _ := svc.GetByID(context.Background(), c.ID)
 	if found.Status != domainCard.StatusBlocked {
 		t.Error("should be BLOCKED")

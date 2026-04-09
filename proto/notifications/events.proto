@@ -1,0 +1,19 @@
+syntax = "proto3";
+
+package xbank.notifications;
+
+option go_package = "github.com/BakhodiribnYashinibnMansur/XBank/proto/notifications";
+
+import "common/metadata.proto";
+
+// NotificationRequested - published when a notification should be sent
+message NotificationRequested {
+  xbank.common.Metadata metadata = 1;
+  string notification_id = 2;
+  string user_id         = 3;
+  string type            = 4;
+  string title           = 5;
+  string body            = 6;
+  string channel         = 7;
+  map<string, string> data = 8;
+}

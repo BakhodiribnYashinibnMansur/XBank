@@ -5,18 +5,39 @@ import (
 	"time"
 
 	card "github.com/BakhodiribnYashinibnMansur/XBank/internal/context/banking/core/card/domain"
-	"github.com/BakhodiribnYashinibnMansur/XBank/internal/kernel/infrastructure/security/crypto"
+	"github.com/BakhodiribnYashinibnMansur/XBank/internal/kernel/domain"
+	"github.com/BakhodiribnYashinibnMansur/XBank/internal/kernel/infrastructure/config"
 	"github.com/BakhodiribnYashinibnMansur/XBank/internal/kernel/infrastructure/metrics"
+	"github.com/BakhodiribnYashinibnMansur/XBank/internal/kernel/infrastructure/security/crypto"
+	cardpb "github.com/BakhodiribnYashinibnMansur/XBank/proto/cards"
+	commonpb "github.com/BakhodiribnYashinibnMansur/XBank/proto/common"
+	"github.com/google/uuid"
+	"google.golang.org/protobuf/proto"
+	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
 type Service struct {
 	repo      card.Repository
 	hasher    card.PINHasher
 	encryptor *crypto.AESEncryptor // nil = no encryption (dev mode)
+	publisher domain.EventPublisher
+	topics    config.KafkaTopicsConfig
 }
 
-func NewService(repo card.Repository, hasher card.PINHasher, encryptor *crypto.AESEncryptor) *Service {
-	return &Service{repo: repo, hasher: hasher, encryptor: encryptor}
+func NewService(
+	repo card.Repository,
+	hasher card.PINHasher,
+	encryptor *crypto.AESEncryptor,
+	publisher domain.EventPublisher,
+	topics config.KafkaTopicsConfig,
+) *Service {
+	return &Service{
+		repo:      repo,
+		hasher:    hasher,
+		encryptor: encryptor,
+		publisher: publisher,
+		topics:    topics,
+	}
 }
 
 // IssueCard - create a new card, encrypt PAN before saving
@@ -40,6 +61,8 @@ func (s *Service) IssueCard(ctx context.Context, accountID string, cardType card
 	if err := s.repo.Create(ctx, c); err != nil {
 		return nil, err
 	}
+
+	s.publishCardIssued(ctx, c, "")
 	return c, nil
 }
 
@@ -56,6 +79,8 @@ func (s *Service) Activate(ctx context.Context, cardID, pin string) (_ *card.Car
 	if err := s.repo.Update(ctx, c); err != nil {
 		return nil, err
 	}
+
+	s.publishCardActivated(ctx, c, "")
 	return c, nil
 }
 
@@ -88,7 +113,7 @@ func (s *Service) ChangePIN(ctx context.Context, cardID, oldPIN, newPIN string) 
 	return s.repo.Update(ctx, c)
 }
 
-func (s *Service) Block(ctx context.Context, cardID string) (err error) {
+func (s *Service) Block(ctx context.Context, cardID, reason string) (err error) {
 	defer metrics.ObserveService("CardService", "Block", time.Now(), &err)
 
 	c, err := s.repo.GetByID(ctx, cardID)
@@ -98,7 +123,12 @@ func (s *Service) Block(ctx context.Context, cardID string) (err error) {
 	if err := c.Block(); err != nil {
 		return err
 	}
-	return s.repo.Update(ctx, c)
+	if err := s.repo.Update(ctx, c); err != nil {
+		return err
+	}
+
+	s.publishCardBlocked(ctx, c, "", reason)
+	return nil
 }
 
 func (s *Service) Unblock(ctx context.Context, cardID string) (err error) {
@@ -165,4 +195,61 @@ func (s *Service) ListByAccountID(ctx context.Context, accountID string, limit, 
 		return nil, 0, err
 	}
 	return cards, total, nil
+}
+
+// --- Kafka publish helpers ---
+
+func newCardMetadata(userID string) *commonpb.Metadata {
+	return &commonpb.Metadata{
+		EventId:   uuid.New().String(),
+		UserId:    userID,
+		Timestamp: timestamppb.Now(),
+		Source:    "xbank-api",
+	}
+}
+
+func (s *Service) publishCardIssued(ctx context.Context, c *card.Card, userID string) {
+	if s.publisher == nil {
+		return
+	}
+	msg := &cardpb.CardIssued{
+		Metadata:  newCardMetadata(userID),
+		CardId:    c.ID,
+		AccountId: c.AccountID,
+		UserId:    userID,
+		CardType:  string(c.CardType),
+		MaskedPan: c.MaskedPAN,
+	}
+	if data, err := proto.Marshal(msg); err == nil {
+		s.publisher.Publish(ctx, s.topics.CardIssued, c.AccountID, data)
+	}
+}
+
+func (s *Service) publishCardActivated(ctx context.Context, c *card.Card, userID string) {
+	if s.publisher == nil {
+		return
+	}
+	msg := &cardpb.CardActivated{
+		Metadata: newCardMetadata(userID),
+		CardId:   c.ID,
+		UserId:   userID,
+	}
+	if data, err := proto.Marshal(msg); err == nil {
+		s.publisher.Publish(ctx, s.topics.CardActivated, c.AccountID, data)
+	}
+}
+
+func (s *Service) publishCardBlocked(ctx context.Context, c *card.Card, userID, reason string) {
+	if s.publisher == nil {
+		return
+	}
+	msg := &cardpb.CardBlocked{
+		Metadata: newCardMetadata(userID),
+		CardId:   c.ID,
+		UserId:   userID,
+		Reason:   reason,
+	}
+	if data, err := proto.Marshal(msg); err == nil {
+		s.publisher.Publish(ctx, s.topics.CardBlocked, c.AccountID, data)
+	}
 }

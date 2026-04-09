@@ -163,14 +163,21 @@ func (sr *SchemaRegistry) CheckCompatibility(subject, protoSchema string) (bool,
 // Call this at startup to ensure schemas are registered.
 func (sr *SchemaRegistry) RegisterAllSchemas() {
 	schemas := map[string]string{
-		"xbank.accounts.opened-value":   accountOpenedProto,
-		"xbank.accounts.credited-value": accountCreditedProto,
-		"xbank.accounts.debited-value":  accountDebitedProto,
-		"xbank.accounts.frozen-value":   accountFrozenProto,
-		"xbank.accounts.closed-value":   accountClosedProto,
-		"xbank.transfers.created-value": transferCreatedProto,
-		"xbank.transfers.completed-value": transferCompletedProto,
-		"xbank.transfers.failed-value":  transferFailedProto,
+		"xbank.accounts.opened-value":          accountOpenedProto,
+		"xbank.accounts.credited-value":        accountCreditedProto,
+		"xbank.accounts.debited-value":         accountDebitedProto,
+		"xbank.accounts.frozen-value":          accountFrozenProto,
+		"xbank.accounts.closed-value":          accountClosedProto,
+		"xbank.transfers.created-value":        transferCreatedProto,
+		"xbank.transfers.completed-value":      transferCompletedProto,
+		"xbank.transfers.failed-value":         transferFailedProto,
+		"xbank.cards.issued-value":             cardIssuedProto,
+		"xbank.cards.blocked-value":            cardBlockedProto,
+		"xbank.cards.activated-value":          cardActivatedProto,
+		"xbank.kyc.submitted-value":            kycSubmittedProto,
+		"xbank.kyc.approved-value":             kycApprovedProto,
+		"xbank.kyc.rejected-value":             kycRejectedProto,
+		"xbank.notifications.requested-value":  notificationRequestedProto,
 	}
 
 	for subject, schema := range schemas {
@@ -267,5 +274,66 @@ message TransferFailed {
   int64 amount = 5;
   string currency = 6;
   string reason = 7;
+}`
+
+	cardIssuedProto = `syntax = "proto3";
+package xbank.cards;
+message CardIssued {
+  string card_id = 2;
+  string account_id = 3;
+  string user_id = 4;
+  string card_type = 5;
+  string masked_pan = 6;
+}`
+
+	cardBlockedProto = `syntax = "proto3";
+package xbank.cards;
+message CardBlocked {
+  string card_id = 2;
+  string user_id = 3;
+  string reason = 4;
+}`
+
+	cardActivatedProto = `syntax = "proto3";
+package xbank.cards;
+message CardActivated {
+  string card_id = 2;
+  string user_id = 3;
+}`
+
+	kycSubmittedProto = `syntax = "proto3";
+package xbank.kyc;
+message KYCSubmitted {
+  string verification_id = 2;
+  string user_id = 3;
+  string document_type = 4;
+}`
+
+	kycApprovedProto = `syntax = "proto3";
+package xbank.kyc;
+message KYCApproved {
+  string verification_id = 2;
+  string user_id = 3;
+  string level = 4;
+}`
+
+	kycRejectedProto = `syntax = "proto3";
+package xbank.kyc;
+message KYCRejected {
+  string verification_id = 2;
+  string user_id = 3;
+  string reason = 4;
+}`
+
+	notificationRequestedProto = `syntax = "proto3";
+package xbank.notifications;
+message NotificationRequested {
+  string notification_id = 2;
+  string user_id = 3;
+  string type = 4;
+  string title = 5;
+  string body = 6;
+  string channel = 7;
+  map<string, string> data = 8;
 }`
 )

@@ -1,0 +1,32 @@
+syntax = "proto3";
+
+package xbank.cards;
+
+option go_package = "github.com/BakhodiribnYashinibnMansur/XBank/proto/cards";
+
+import "common/metadata.proto";
+
+// CardIssued - published when a new card is created
+message CardIssued {
+  xbank.common.Metadata metadata = 1;
+  string card_id    = 2;
+  string account_id = 3;
+  string user_id    = 4;
+  string card_type  = 5;
+  string masked_pan = 6;
+}
+
+// CardBlocked - published when a card is blocked
+message CardBlocked {
+  xbank.common.Metadata metadata = 1;
+  string card_id = 2;
+  string user_id = 3;
+  string reason  = 4;
+}
+
+// CardActivated - published when a card is activated
+message CardActivated {
+  xbank.common.Metadata metadata = 1;
+  string card_id = 2;
+  string user_id = 3;
+}
