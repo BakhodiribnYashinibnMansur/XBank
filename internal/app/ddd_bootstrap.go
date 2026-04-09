@@ -2,6 +2,7 @@ package app
 
 import (
 	"github.com/BakhodiribnYashinibnMansur/XBank/internal/context/admin/generic/featureflag"
+	"github.com/BakhodiribnYashinibnMansur/XBank/internal/context/admin/supporting/dataexport"
 	"github.com/BakhodiribnYashinibnMansur/XBank/internal/context/admin/supporting/integration"
 	"github.com/BakhodiribnYashinibnMansur/XBank/internal/context/admin/supporting/sitesetting"
 	"github.com/BakhodiribnYashinibnMansur/XBank/internal/context/admin/supporting/statistics"
@@ -14,6 +15,7 @@ import (
 	"github.com/BakhodiribnYashinibnMansur/XBank/internal/context/banking/supporting/fraud"
 	"github.com/BakhodiribnYashinibnMansur/XBank/internal/context/banking/supporting/kyc"
 	"github.com/BakhodiribnYashinibnMansur/XBank/internal/context/banking/supporting/reconciliation"
+	"github.com/BakhodiribnYashinibnMansur/XBank/internal/context/content/generic/file"
 	"github.com/BakhodiribnYashinibnMansur/XBank/internal/context/content/generic/notification"
 	"github.com/BakhodiribnYashinibnMansur/XBank/internal/context/content/generic/translation"
 	"github.com/BakhodiribnYashinibnMansur/XBank/internal/context/content/supporting/announcement"
@@ -21,8 +23,10 @@ import (
 	"github.com/BakhodiribnYashinibnMansur/XBank/internal/context/iam/generic/authz"
 	"github.com/BakhodiribnYashinibnMansur/XBank/internal/context/iam/generic/session"
 	"github.com/BakhodiribnYashinibnMansur/XBank/internal/context/iam/generic/user"
+	"github.com/BakhodiribnYashinibnMansur/XBank/internal/context/iam/generic/usersetting"
 	"github.com/BakhodiribnYashinibnMansur/XBank/internal/context/iam/supporting/audit"
 	"github.com/BakhodiribnYashinibnMansur/XBank/internal/context/iam/supporting/contact"
+	"github.com/BakhodiribnYashinibnMansur/XBank/internal/context/iam/supporting/device"
 	"github.com/BakhodiribnYashinibnMansur/XBank/internal/context/ops/generic/metric"
 	"github.com/BakhodiribnYashinibnMansur/XBank/internal/context/ops/generic/ratelimit"
 	"github.com/BakhodiribnYashinibnMansur/XBank/internal/context/ops/generic/systemerror"
@@ -60,9 +64,13 @@ type DDDBoundedContexts struct {
 	Session *session.BoundedContext
 	Authz   *authz.BoundedContext
 
+	// IAM — Generic
+	UserSetting *usersetting.BoundedContext
+
 	// IAM — Supporting
 	Contact *contact.BoundedContext
 	Audit   *audit.BoundedContext
+	Device  *device.BoundedContext
 
 	// Admin — Generic
 	FeatureFlag *featureflag.BoundedContext
@@ -71,8 +79,10 @@ type DDDBoundedContexts struct {
 	SiteSetting *sitesetting.BoundedContext
 	Statistics  *statistics.BoundedContext
 	Integration *integration.BoundedContext
+	DataExport  *dataexport.BoundedContext
 
 	// Content — Generic
+	File         *file.BoundedContext
 	Notification *notification.BoundedContext
 	Translation  *translation.BoundedContext
 
@@ -115,9 +125,13 @@ func NewDDDBoundedContexts(
 	// IAM — Generic (authz)
 	authzBC := authz.NewBoundedContext(pool)
 
+	// IAM — Generic
+	userSettingBC := usersetting.NewBoundedContext(pool)
+
 	// IAM — Supporting
 	contactBC := contact.NewBoundedContext(pool)
 	auditBC := audit.NewBoundedContext(pool)
+	deviceBC := device.NewBoundedContext(pool)
 
 	// Banking — Core
 	ledgerBC := ledger.NewBoundedContext(pool)
@@ -138,6 +152,7 @@ func NewDDDBoundedContexts(
 	statisticsBC := statistics.NewBoundedContext(pool)
 
 	// Content
+	fileBC := file.NewBoundedContext(pool)
 	notificationBC := notification.NewBoundedContext(pool, eventBus)
 	translationBC := translation.NewBoundedContext(pool, eventBus)
 	announcementBC := announcement.NewBoundedContext(pool, eventBus)
@@ -149,8 +164,9 @@ func NewDDDBoundedContexts(
 	errorCodeBC := errorcode.NewBoundedContext(pool)
 	ipRuleBC := iprule.NewBoundedContext(pool)
 
-	// Admin — Supporting (integration)
+	// Admin — Supporting
 	integrationBC := integration.NewBoundedContext(pool)
+	dataExportBC := dataexport.NewBoundedContext(pool)
 
 	return &DDDBoundedContexts{
 		Account:        accountBC,
@@ -166,11 +182,14 @@ func NewDDDBoundedContexts(
 		User:           userBC,
 		Session:        sessionBC,
 		Authz:          authzBC,
+		UserSetting:    userSettingBC,
 		Contact:        contactBC,
 		Audit:          auditBC,
+		Device:         deviceBC,
 		FeatureFlag:    featureFlagBC,
 		SiteSetting:    siteSettingBC,
 		Statistics:     statisticsBC,
+		File:           fileBC,
 		Notification:   notificationBC,
 		Translation:    translationBC,
 		Announcement:   announcementBC,
@@ -180,5 +199,6 @@ func NewDDDBoundedContexts(
 		ErrorCode:      errorCodeBC,
 		IPRule:         ipRuleBC,
 		Integration:    integrationBC,
+		DataExport:     dataExportBC,
 	}
 }

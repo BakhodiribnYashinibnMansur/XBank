@@ -191,6 +191,18 @@ func registerProtectedRoutes(
 	if bcs.FeatureFlag != nil {
 		protected.Post("/flags/evaluate", bcs.FeatureFlag.Handler.Evaluate)
 	}
+	if bcs.Ledger != nil {
+		bcs.Ledger.Handler.RegisterRoutes(protected)
+	}
+	if bcs.Device != nil {
+		bcs.Device.Handler.RegisterRoutes(protected)
+	}
+	if bcs.UserSetting != nil {
+		bcs.UserSetting.Handler.RegisterRoutes(protected)
+	}
+	if bcs.File != nil {
+		bcs.File.Handler.RegisterRoutes(protected)
+	}
 }
 
 // registerAdminRoutes registers admin-only routes.
@@ -233,6 +245,21 @@ func registerAdminRoutes(admin fiber.Router, bcs *DDDBoundedContexts) {
 	}
 	if bcs.Exchange != nil {
 		admin.Post("/currencies/rate", bcs.Exchange.Handler.UpsertRate)
+	}
+	if bcs.Integration != nil {
+		bcs.Integration.Handler.RegisterRoutes(admin)
+	}
+	if bcs.DataExport != nil {
+		bcs.DataExport.Handler.RegisterAdminRoutes(admin)
+	}
+	if bcs.Metric != nil {
+		bcs.Metric.Handler.RegisterRoutes(admin)
+	}
+	if bcs.RateLimit != nil {
+		bcs.RateLimit.Handler.RegisterRoutes(admin)
+	}
+	if bcs.IPRule != nil {
+		bcs.IPRule.Handler.RegisterRoutes(admin)
 	}
 }
 
