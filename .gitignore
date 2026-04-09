@@ -21,6 +21,8 @@
 !proto/**
 !deploy/
 !deploy/**
+!test/
+!test/**
 !tests/
 !tests/**
 
@@ -34,6 +36,15 @@
 !docker-compose.yml
 !.env.example
 !config.yml
+!.air.toml
+!.dockerignore
+!.golangci.yml
+!.github/
+!.github/**
+!scripts/
+!scripts/**
+!README.md
+!PROJECT_STRUCTURE.md
 
 # Bularni hech qachon track qilma
 .env
