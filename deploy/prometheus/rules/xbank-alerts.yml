@@ -233,6 +233,42 @@ groups:
           summary: "Unusual account closure rate detected"
           description: "{{ $value }} accounts closed/s — possible unauthorized bulk operation"
 
+      # High rate of 401 responses (auth failures)
+      - alert: AuthFailureSpike
+        expr: |
+          sum(rate(xbank_http_requests_total{status="401"}[5m]))
+          > 0.5
+        for: 2m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High rate of authentication failures (401)"
+          description: "{{ $value }} auth failures/s — possible token abuse or scanning"
+
+      # High rate of 403 responses (authorization failures)
+      - alert: AuthzFailureSpike
+        expr: |
+          sum(rate(xbank_http_requests_total{status="403"}[5m]))
+          > 0.3
+        for: 2m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High rate of authorization failures (403)"
+          description: "{{ $value }} authz failures/s — possible privilege escalation attempt"
+
+      # Rate limit spike (429 responses)
+      - alert: RateLimitSpike
+        expr: |
+          sum(rate(xbank_http_requests_total{status="429"}[5m]))
+          > 1
+        for: 2m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Rate limiting triggered frequently"
+          description: "{{ $value }} rate-limited requests/s — possible DoS or abuse"
+
       # DLQ retry failures (persistent message processing issues)
       - alert: DLQRetryFailures
         expr: sum(rate(xbank_kafka_messages_total{status="dlq_retry_fail"}[10m])) > 0

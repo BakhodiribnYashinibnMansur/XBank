@@ -450,6 +450,137 @@ func TestErrorResponse_NoInternalDetails(t *testing.T) {
 	}
 }
 
+// --- A01: Broken Access Control (Extended) ---
+
+func TestIDOR_UserCannotAccessOtherUserData(t *testing.T) {
+	jwtService := newTestJWTService(t)
+	app := newTestApp()
+
+	// Protected route that returns data for a specific user
+	app.Get("/api/v1/accounts/:user_id", AuthMiddleware(jwtService), func(c *fiber.Ctx) error {
+		requestedUserID := c.Params("user_id")
+		authenticatedUserID := c.Locals("user_id").(string)
+
+		// Ownership check — user can only access their own data
+		if requestedUserID != authenticatedUserID {
+			return c.Status(fiber.StatusForbidden).JSON(fiber.Map{"error": "access denied"})
+		}
+		return c.JSON(fiber.Map{"user_id": requestedUserID, "balance": 1000})
+	})
+
+	// user-1 tries to access user-2's account
+	pair, _ := jwtService.GenerateTokenPair("user-1", "user1@test.com", "CUSTOMER", "0.0.0.0")
+	req, _ := http.NewRequest(http.MethodGet, "/api/v1/accounts/user-2", nil)
+	req.Header.Set("Authorization", "Bearer "+pair.AccessToken)
+
+	resp, _ := app.Test(req)
+	if resp.StatusCode != http.StatusForbidden {
+		t.Errorf("IDOR: user-1 accessing user-2 data should get 403, got %d", resp.StatusCode)
+	}
+}
+
+func TestIDOR_UserCanAccessOwnData(t *testing.T) {
+	jwtService := newTestJWTService(t)
+	app := newTestApp()
+
+	app.Get("/api/v1/accounts/:user_id", AuthMiddleware(jwtService), func(c *fiber.Ctx) error {
+		requestedUserID := c.Params("user_id")
+		authenticatedUserID := c.Locals("user_id").(string)
+
+		if requestedUserID != authenticatedUserID {
+			return c.Status(fiber.StatusForbidden).JSON(fiber.Map{"error": "access denied"})
+		}
+		return c.JSON(fiber.Map{"user_id": requestedUserID, "balance": 1000})
+	})
+
+	pair, _ := jwtService.GenerateTokenPair("user-1", "user1@test.com", "CUSTOMER", "0.0.0.0")
+	req, _ := http.NewRequest(http.MethodGet, "/api/v1/accounts/user-1", nil)
+	req.Header.Set("Authorization", "Bearer "+pair.AccessToken)
+
+	resp, _ := app.Test(req)
+	if resp.StatusCode != http.StatusOK {
+		t.Errorf("user-1 should access own data, got %d", resp.StatusCode)
+	}
+}
+
+func TestHorizontalEscalation_CustomerCannotEscalateToAdmin(t *testing.T) {
+	jwtService := newTestJWTService(t)
+	app := newTestApp()
+
+	// Admin-only endpoint: create user with role
+	app.Post("/api/v1/admin/users", AuthMiddleware(jwtService), RequireRole("ADMIN"), func(c *fiber.Ctx) error {
+		return c.JSON(fiber.Map{"created": true})
+	})
+
+	// CUSTOMER trying to create admin users
+	pair, _ := jwtService.GenerateTokenPair("user-1", "user1@test.com", "CUSTOMER", "0.0.0.0")
+	req, _ := http.NewRequest(http.MethodPost, "/api/v1/admin/users",
+		bytes.NewReader([]byte(`{"email":"evil@test.com","role":"ADMIN"}`)))
+	req.Header.Set("Authorization", "Bearer "+pair.AccessToken)
+	req.Header.Set("Content-Type", "application/json")
+
+	resp, _ := app.Test(req)
+	if resp.StatusCode != http.StatusForbidden {
+		t.Errorf("CUSTOMER should not access admin endpoint, got %d", resp.StatusCode)
+	}
+}
+
+func TestVerticalEscalation_MultipleRoleLevels(t *testing.T) {
+	jwtService := newTestJWTService(t)
+	app := newTestApp()
+
+	// Route requiring SUPER_ADMIN
+	app.Delete("/api/v1/admin/system", AuthMiddleware(jwtService), RequireRole("SUPER_ADMIN"), func(c *fiber.Ctx) error {
+		return c.JSON(fiber.Map{"deleted": true})
+	})
+
+	// ADMIN (not SUPER_ADMIN) tries to access
+	pair, _ := jwtService.GenerateTokenPair("admin-1", "admin@test.com", "ADMIN", "0.0.0.0")
+	req, _ := http.NewRequest(http.MethodDelete, "/api/v1/admin/system", nil)
+	req.Header.Set("Authorization", "Bearer "+pair.AccessToken)
+
+	resp, _ := app.Test(req)
+	if resp.StatusCode != http.StatusForbidden {
+		t.Errorf("ADMIN accessing SUPER_ADMIN route should get 403, got %d", resp.StatusCode)
+	}
+}
+
+// --- A07: Identification and Authentication Failures ---
+
+func TestAuth_SessionFixation_NewTokenOnLogin(t *testing.T) {
+	jwtService := newTestJWTService(t)
+
+	// Simulate two logins — tokens must be different (new session each time)
+	pair1, _ := jwtService.GenerateTokenPair("user-1", "user@test.com", "CUSTOMER", "0.0.0.0")
+	pair2, _ := jwtService.GenerateTokenPair("user-1", "user@test.com", "CUSTOMER", "0.0.0.0")
+
+	if pair1.AccessToken == pair2.AccessToken {
+		t.Error("Session fixation: two logins should produce different access tokens")
+	}
+	if pair1.RefreshToken == pair2.RefreshToken {
+		t.Error("Session fixation: two logins should produce different refresh tokens")
+	}
+}
+
+func TestAuth_IPBinding_DifferentIP_Rejected(t *testing.T) {
+	jwtService := newTestJWTService(t)
+	app := newTestApp()
+	app.Get("/protected", AuthMiddleware(jwtService), func(c *fiber.Ctx) error {
+		return c.JSON(fiber.Map{"ok": true})
+	})
+
+	// Token created for IP 1.2.3.4
+	pair, _ := jwtService.GenerateTokenPair("user-1", "user@test.com", "CUSTOMER", "1.2.3.4")
+	req, _ := http.NewRequest(http.MethodGet, "/protected", nil)
+	req.Header.Set("Authorization", "Bearer "+pair.AccessToken)
+	// Fiber test uses 0.0.0.0 as client IP — different from 1.2.3.4
+
+	resp, _ := app.Test(req)
+	if resp.StatusCode == http.StatusOK {
+		t.Error("Token with IP binding should be rejected from different IP")
+	}
+}
+
 // --- HSTS Enforcement ---
 
 func TestHSTS_IncludesSubDomains(t *testing.T) {

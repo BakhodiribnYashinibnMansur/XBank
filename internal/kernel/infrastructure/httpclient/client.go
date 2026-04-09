@@ -19,6 +19,7 @@ import (
 type Client struct {
 	http          *http.Client
 	slowThreshold time.Duration
+	ssrfGuard     *SSRFGuard
 }
 
 // NewClient creates an instrumented HTTP client.
@@ -29,8 +30,29 @@ func NewClient(timeout, slowThreshold time.Duration) *Client {
 	}
 }
 
+// NewClientWithSSRF creates an instrumented HTTP client with SSRF protection.
+func NewClientWithSSRF(timeout, slowThreshold time.Duration, guard *SSRFGuard) *Client {
+	return &Client{
+		http:          &http.Client{Timeout: timeout},
+		slowThreshold: slowThreshold,
+		ssrfGuard:     guard,
+	}
+}
+
 // Do executes an HTTP request with logging.
+// If SSRFGuard is configured, validates the URL before sending.
 func (c *Client) Do(ctx context.Context, req *http.Request, operation string) (*http.Response, []byte, error) {
+	if c.ssrfGuard != nil {
+		if err := c.ssrfGuard.Validate(req.URL.String()); err != nil {
+			logger.Log.Warn("SSRF blocked outbound request",
+				zap.String("operation", operation),
+				zap.String("url", req.URL.String()),
+				zap.Error(err),
+			)
+			return nil, nil, fmt.Errorf("httpclient %s: %w", operation, err)
+		}
+	}
+
 	start := time.Now()
 
 	resp, err := c.http.Do(req.WithContext(ctx))
