@@ -55,7 +55,7 @@ func TestHealthEndpoint(t *testing.T) {
 
 	fiberApp := app.RegisterDDDRoutes(
 		&app.DDDBoundedContexts{},
-		nil, nil, nil, nil,
+		nil, nil, nil,
 		jwtService,
 		middleware.NewDynamicIPWhitelist(nil, 0),
 		nil, nil, cfg,
@@ -86,7 +86,7 @@ func TestProtectedRouteWithoutToken(t *testing.T) {
 
 	fiberApp := app.RegisterDDDRoutes(
 		&app.DDDBoundedContexts{},
-		nil, nil, nil, nil,
+		nil, nil, nil,
 		jwtService,
 		middleware.NewDynamicIPWhitelist(nil, 0),
 		nil, nil, cfg,

@@ -9,6 +9,7 @@ import (
 	"github.com/BakhodiribnYashinibnMansur/XBank/internal/kernel/domain"
 	"github.com/BakhodiribnYashinibnMansur/XBank/internal/kernel/infrastructure/config"
 	"github.com/BakhodiribnYashinibnMansur/XBank/internal/kernel/infrastructure/metrics"
+	"github.com/BakhodiribnYashinibnMansur/XBank/internal/kernel/outbox"
 	accountpb "github.com/BakhodiribnYashinibnMansur/XBank/proto/accounts"
 	commonpb "github.com/BakhodiribnYashinibnMansur/XBank/proto/common"
 	"github.com/google/uuid"
@@ -55,13 +56,17 @@ func (s *Service) CreateAccount(ctx context.Context, userID string, currency dom
 	}
 
 	err = s.txManager.WithTx(ctx, func(txCtx context.Context) error {
-		if err := s.eventRepo.Append(txCtx, acc.ID, 0, acc.UncommittedEvents()); err != nil {
+		if err := s.eventRepo.Append(txCtx, acc.ID, acc.UncommittedEvents()); err != nil {
 			return err
 		}
 		if err := s.repo.Create(txCtx, acc); err != nil {
 			return err
 		}
 		acc.ClearUncommittedEvents()
+
+		// Outbox: publish within the same transaction
+		txCtx = outbox.WithOutboxMeta(txCtx, "Account", acc.ID)
+		s.publishAccountOpened(txCtx, acc, userID)
 		return nil
 	})
 	if err != nil {
@@ -69,7 +74,6 @@ func (s *Service) CreateAccount(ctx context.Context, userID string, currency dom
 	}
 
 	metrics.AccountsCreatedTotal.Inc()
-	s.publishAccountOpened(ctx, acc, userID)
 	s.audit(ctx, acc.ID, "AccountOpened", map[string]string{
 		"user_id": userID, "currency": string(currency), "account_number": acc.AccountNumber,
 	})
@@ -120,6 +124,11 @@ func (s *Service) Deposit(ctx context.Context, accountID string, amount int64) (
 		if err := s.saveAggregate(txCtx, acc); err != nil {
 			return err
 		}
+
+		// Outbox: publish within the same transaction
+		txCtx = outbox.WithOutboxMeta(txCtx, "Account", acc.ID)
+		s.publishAccountCredited(txCtx, acc, amount)
+
 		result = acc
 		return nil
 	})
@@ -128,7 +137,6 @@ func (s *Service) Deposit(ctx context.Context, accountID string, amount int64) (
 	}
 
 	metrics.DepositsTotal.Inc()
-	s.publishAccountCredited(ctx, result, amount)
 	s.audit(ctx, result.ID, "Credited", map[string]string{
 		"amount": fmt.Sprintf("%d", amount), "currency": string(result.Balance.Currency),
 	})
@@ -158,6 +166,11 @@ func (s *Service) Withdraw(ctx context.Context, accountID string, amount int64) 
 		if err := s.saveAggregate(txCtx, acc); err != nil {
 			return err
 		}
+
+		// Outbox: publish within the same transaction
+		txCtx = outbox.WithOutboxMeta(txCtx, "Account", acc.ID)
+		s.publishAccountDebited(txCtx, acc, amount)
+
 		result = acc
 		return nil
 	})
@@ -166,7 +179,6 @@ func (s *Service) Withdraw(ctx context.Context, accountID string, amount int64) 
 	}
 
 	metrics.WithdrawalsTotal.Inc()
-	s.publishAccountDebited(ctx, result, amount)
 	s.audit(ctx, result.ID, "Debited", map[string]string{
 		"amount": fmt.Sprintf("%d", amount), "currency": string(result.Balance.Currency),
 	})
@@ -185,14 +197,20 @@ func (s *Service) CloseAccount(ctx context.Context, accountID string) (err error
 		if err := acc.Close(); err != nil {
 			return err
 		}
-		return s.saveAggregate(txCtx, acc)
+		if err := s.saveAggregate(txCtx, acc); err != nil {
+			return err
+		}
+
+		// Outbox: publish within the same transaction
+		txCtx = outbox.WithOutboxMeta(txCtx, "Account", accountID)
+		s.publishAccountClosed(txCtx, accountID)
+		return nil
 	})
 	if err != nil {
 		return err
 	}
 
 	metrics.AccountsClosedTotal.Inc()
-	s.publishAccountClosed(ctx, accountID)
 	s.audit(ctx, accountID, "Closed", nil)
 	return nil
 }
@@ -214,6 +232,11 @@ func (s *Service) GetHistory(ctx context.Context, accountID string) (_ []account
 // --- Internal: aggregate load/save ---
 
 func (s *Service) loadAggregate(ctx context.Context, id string) (*account.Account, error) {
+	// Pessimistic lock — accounts row'ni qulflash (FOR UPDATE)
+	if _, err := s.repo.GetByIDForUpdate(ctx, id); err != nil {
+		return nil, err
+	}
+
 	snapshot, err := s.eventRepo.LoadSnapshot(ctx, id)
 	if err != nil {
 		return nil, err
@@ -253,9 +276,7 @@ func (s *Service) saveAggregate(ctx context.Context, acc *account.Account) error
 		return nil
 	}
 
-	expectedVersion := acc.Version - len(events)
-
-	if err := s.eventRepo.Append(ctx, acc.ID, expectedVersion, events); err != nil {
+	if err := s.eventRepo.Append(ctx, acc.ID, events); err != nil {
 		return err
 	}
 
@@ -291,7 +312,7 @@ func (s *Service) audit(ctx context.Context, accountID, action string, attrs map
 	})
 }
 
-// --- Kafka publish helpers (best-effort, after DB commit) ---
+// --- Kafka publish helpers (outbox: called within DB transaction) ---
 
 func newMetadata(userID string) *commonpb.Metadata {
 	return &commonpb.Metadata{

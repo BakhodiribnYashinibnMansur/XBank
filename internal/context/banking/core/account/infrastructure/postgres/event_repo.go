@@ -22,7 +22,7 @@ func NewEventRepo(pool *pgxpool.Pool) *EventRepo {
 }
 
 // Append - EAV: each event field = separate row
-func (r *EventRepo) Append(ctx context.Context, aggregateID string, expectedVersion int, events []account.Event) error {
+func (r *EventRepo) Append(ctx context.Context, aggregateID string, events []account.Event) error {
 	start := time.Now()
 	db := sharedpg.ExtractDBTX(ctx, r.pool)
 

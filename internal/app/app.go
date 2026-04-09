@@ -21,6 +21,7 @@ import (
 	infraAuth "github.com/BakhodiribnYashinibnMansur/XBank/internal/kernel/infrastructure/security/jwt"
 	"github.com/BakhodiribnYashinibnMansur/XBank/internal/kernel/domain"
 	"github.com/BakhodiribnYashinibnMansur/XBank/internal/kernel/infrastructure/eventbus"
+	"github.com/BakhodiribnYashinibnMansur/XBank/internal/kernel/outbox"
 	"github.com/BakhodiribnYashinibnMansur/XBank/internal/kernel/infrastructure/middleware"
 	"github.com/BakhodiribnYashinibnMansur/XBank/pkg/logger"
 	"go.uber.org/zap"
@@ -115,11 +116,15 @@ func Run(cfg *config.Config) {
 	poolCtx, poolCancel := context.WithCancel(ctx)
 	metrics.StartDBPoolCollector(poolCtx, pool, 15*time.Second)
 
-	// Kafka producer with DLQ fallback
+	// Kafka producer with DLQ fallback (used by outbox relay)
 	rawKafkaProducer := infraKafka.NewProducer(cfg.Kafka.Brokers)
 	dlqRepo := postgres.NewDLQRepository(pool)
 	dlqProducer := infraKafka.NewDLQProducer(rawKafkaProducer, dlqRepo)
-	kafkaProducer := dlqProducer
+
+	// Outbox: transactional publisher for services, relay for background delivery
+	outboxRepo := outbox.NewRepository(pool)
+	outboxPublisher := outbox.NewPublisher(outboxRepo)
+	outboxRelay := outbox.NewRelay(outboxRepo, dlqProducer)
 
 	// Schema Registry
 	if cfg.Kafka.SchemaRegistryURL != "" {
@@ -134,10 +139,8 @@ func Run(cfg *config.Config) {
 		logger.Log.Warn("MongoDB unavailable, audit logging disabled", zap.Error(err))
 	}
 	var auditLog domain.AuditLog
-	var auditReader *infraMongo.AuditReader
 	if mongoClient != nil {
 		auditLog = infraMongo.NewAuditLog(mongoClient.Database(cfg.MongoDB.Database))
-		auditReader = infraMongo.NewAuditReader(mongoClient.Database(cfg.MongoDB.Database))
 	}
 
 	// Card encryption
@@ -174,7 +177,7 @@ func Run(cfg *config.Config) {
 
 	// ── DDD Bounded Contexts ───────────────────────────────────
 	bcs := NewDDDBoundedContexts(
-		pool, txManager, kafkaProducer, evBus, cfg,
+		pool, txManager, outboxPublisher, evBus, cfg,
 		jwtService, totpService,
 		sessionCache, loginLimiter, challengeCache,
 		cardEncryptor, tokenizer,
@@ -186,7 +189,7 @@ func Run(cfg *config.Config) {
 
 	// ── HTTP Router (DDD routes) ───────────────────────────────
 	fiberApp := RegisterDDDRoutes(
-		bcs, pool, mongoClient, auditReader, sseHub,
+		bcs, pool, mongoClient, sseHub,
 		jwtService, adminWhitelist, hmacSigner,
 		redisClient, cfg,
 	)
@@ -209,8 +212,23 @@ func Run(cfg *config.Config) {
 	quit := make(chan os.Signal, 1)
 	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
 
-	// Background: DLQ retry worker (every 30s)
+	// Background: outbox relay worker (every 2s)
 	dlqCtx, dlqCancel := context.WithCancel(ctx)
+	go func() {
+		ticker := time.NewTicker(2 * time.Second)
+		defer ticker.Stop()
+		for {
+			select {
+			case <-dlqCtx.Done():
+				return
+			case <-ticker.C:
+				outboxRelay.ProcessBatch(dlqCtx, 100)
+			}
+		}
+	}()
+	logger.Log.Info("Outbox relay worker started (every 2s)")
+
+	// Background: DLQ retry worker (every 30s)
 	go func() {
 		ticker := time.NewTicker(30 * time.Second)
 		defer ticker.Stop()
@@ -270,7 +288,7 @@ func Run(cfg *config.Config) {
 	if err := kafkaConsumer.Close(); err != nil {
 		logger.Log.Error("Kafka consumer yopishda xatolik", zap.Error(err))
 	}
-	if err := kafkaProducer.Close(); err != nil {
+	if err := dlqProducer.Close(); err != nil {
 		logger.Log.Error("Kafka producer yopishda xatolik", zap.Error(err))
 	}
 

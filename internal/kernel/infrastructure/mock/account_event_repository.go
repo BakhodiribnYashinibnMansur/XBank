@@ -5,7 +5,6 @@ import (
 	"sync"
 
 	account "github.com/BakhodiribnYashinibnMansur/XBank/internal/context/banking/core/account/domain"
-	"github.com/BakhodiribnYashinibnMansur/XBank/pkg/apperror"
 )
 
 type AccountEventRepository struct {
@@ -21,21 +20,11 @@ func NewAccountEventRepository() *AccountEventRepository {
 	}
 }
 
-func (r *AccountEventRepository) Append(ctx context.Context, aggregateID string, expectedVersion int, events []account.Event) error {
+func (r *AccountEventRepository) Append(ctx context.Context, aggregateID string, events []account.Event) error {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 
-	existing := r.events[aggregateID]
-	currentVersion := 0
-	if len(existing) > 0 {
-		currentVersion = existing[len(existing)-1].Version
-	}
-
-	if currentVersion != expectedVersion {
-		return apperror.ErrConcurrencyConflict
-	}
-
-	r.events[aggregateID] = append(existing, events...)
+	r.events[aggregateID] = append(r.events[aggregateID], events...)
 	return nil
 }
 

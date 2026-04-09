@@ -21,7 +21,7 @@ func NewEventRepo(pool *pgxpool.Pool) *EventRepo {
 }
 
 // Append - persist transfer events as EAV rows
-func (r *EventRepo) Append(ctx context.Context, aggregateID string, expectedVersion int, events []transfer.Event) error {
+func (r *EventRepo) Append(ctx context.Context, aggregateID string, events []transfer.Event) error {
 	start := time.Now()
 	db := sharedpg.ExtractDBTX(ctx, r.pool)
 
