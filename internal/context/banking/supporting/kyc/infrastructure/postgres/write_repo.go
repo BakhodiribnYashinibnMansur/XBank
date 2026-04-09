@@ -38,13 +38,17 @@ func (r *WriteRepo) GetByID(ctx context.Context, id string) (*domain.Verificatio
 	start := time.Now()
 	db := sharedpg.ExtractDBTX(ctx, r.pool)
 	v := &domain.Verification{}
+	var reviewedBy *string
 	err := db.QueryRow(ctx,
 		`SELECT id, user_id, document_type, document_number, first_name, last_name, date_of_birth, status, rejected_reason, reviewed_by, created_at, updated_at
 		 FROM kyc_verifications WHERE id = $1`, id,
-	).Scan(&v.ID, &v.UserID, &v.DocumentType, &v.DocumentNumber, &v.FirstName, &v.LastName, &v.DateOfBirth, &v.Status, &v.RejectedReason, &v.ReviewedBy, &v.CreatedAt, &v.UpdatedAt)
+	).Scan(&v.ID, &v.UserID, &v.DocumentType, &v.DocumentNumber, &v.FirstName, &v.LastName, &v.DateOfBirth, &v.Status, &v.RejectedReason, &reviewedBy, &v.CreatedAt, &v.UpdatedAt)
 	metrics.ObserveQuery("KYCRepo.GetByID", start, err)
 	if err != nil {
 		return nil, domain.ErrKYCRequired
+	}
+	if reviewedBy != nil {
+		v.ReviewedBy = *reviewedBy
 	}
 	return v, nil
 }
@@ -53,13 +57,17 @@ func (r *WriteRepo) GetByUserID(ctx context.Context, userID string) (*domain.Ver
 	start := time.Now()
 	db := sharedpg.ExtractDBTX(ctx, r.pool)
 	v := &domain.Verification{}
+	var reviewedBy *string
 	err := db.QueryRow(ctx,
 		`SELECT id, user_id, document_type, document_number, first_name, last_name, date_of_birth, status, rejected_reason, reviewed_by, created_at, updated_at
 		 FROM kyc_verifications WHERE user_id = $1`, userID,
-	).Scan(&v.ID, &v.UserID, &v.DocumentType, &v.DocumentNumber, &v.FirstName, &v.LastName, &v.DateOfBirth, &v.Status, &v.RejectedReason, &v.ReviewedBy, &v.CreatedAt, &v.UpdatedAt)
+	).Scan(&v.ID, &v.UserID, &v.DocumentType, &v.DocumentNumber, &v.FirstName, &v.LastName, &v.DateOfBirth, &v.Status, &v.RejectedReason, &reviewedBy, &v.CreatedAt, &v.UpdatedAt)
 	metrics.ObserveQuery("KYCRepo.GetByUserID", start, err)
 	if err != nil {
 		return nil, domain.ErrKYCRequired
+	}
+	if reviewedBy != nil {
+		v.ReviewedBy = *reviewedBy
 	}
 	return v, nil
 }
@@ -67,9 +75,13 @@ func (r *WriteRepo) GetByUserID(ctx context.Context, userID string) (*domain.Ver
 func (r *WriteRepo) Update(ctx context.Context, v *domain.Verification) error {
 	start := time.Now()
 	db := sharedpg.ExtractDBTX(ctx, r.pool)
+	var reviewedBy interface{}
+	if v.ReviewedBy != "" {
+		reviewedBy = v.ReviewedBy
+	}
 	_, err := db.Exec(ctx,
 		`UPDATE kyc_verifications SET status = $1, rejected_reason = $2, reviewed_by = $3, updated_at = $4 WHERE id = $5`,
-		v.Status, v.RejectedReason, v.ReviewedBy, v.UpdatedAt, v.ID,
+		v.Status, v.RejectedReason, reviewedBy, v.UpdatedAt, v.ID,
 	)
 	metrics.ObserveQuery("KYCRepo.Update", start, err)
 	return err
@@ -90,9 +102,13 @@ func (r *WriteRepo) ListPending(ctx context.Context, limit, offset int) ([]*doma
 	var items []*domain.Verification
 	for rows.Next() {
 		v := &domain.Verification{}
-		if err := rows.Scan(&v.ID, &v.UserID, &v.DocumentType, &v.DocumentNumber, &v.FirstName, &v.LastName, &v.DateOfBirth, &v.Status, &v.RejectedReason, &v.ReviewedBy, &v.CreatedAt, &v.UpdatedAt); err != nil {
+		var reviewedBy *string
+		if err := rows.Scan(&v.ID, &v.UserID, &v.DocumentType, &v.DocumentNumber, &v.FirstName, &v.LastName, &v.DateOfBirth, &v.Status, &v.RejectedReason, &reviewedBy, &v.CreatedAt, &v.UpdatedAt); err != nil {
 			metrics.ObserveQuery("KYCRepo.ListPending", start, err)
 			return nil, fmt.Errorf("kyc_repo: list_pending scan: %w", err)
+		}
+		if reviewedBy != nil {
+			v.ReviewedBy = *reviewedBy
 		}
 		items = append(items, v)
 	}

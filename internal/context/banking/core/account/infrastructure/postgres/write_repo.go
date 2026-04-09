@@ -23,12 +23,12 @@ func (r *WriteRepo) Create(ctx context.Context, a *account.Account) error {
 	start := time.Now()
 	db := sharedpg.ExtractDBTX(ctx, r.pool)
 	query := `
-		INSERT INTO accounts (user_id, account_number, balance, currency, status, created_at, updated_at)
-		VALUES ($1, $2, $3, $4, $5, $6, $7)
+		INSERT INTO accounts (id, user_id, account_number, balance, currency, status, created_at, updated_at)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
 		RETURNING id`
 
 	err := db.QueryRow(ctx, query,
-		a.UserID, a.AccountNumber, a.Balance.Amount, a.Balance.Currency,
+		a.ID, a.UserID, a.AccountNumber, a.Balance.Amount, a.Balance.Currency,
 		a.Status, a.CreatedAt, a.UpdatedAt,
 	).Scan(&a.ID)
 	metrics.ObserveQuery("AccountRepo.Create", start, err)

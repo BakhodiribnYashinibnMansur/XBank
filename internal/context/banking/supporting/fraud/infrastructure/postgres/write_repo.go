@@ -38,13 +38,20 @@ func (r *WriteRepo) GetByTransferID(ctx context.Context, transferID string) (*do
 	start := time.Now()
 	db := sharedpg.ExtractDBTX(ctx, r.pool)
 	ch := &domain.Check{}
+	var reviewedBy, reviewComment *string
 	err := db.QueryRow(ctx,
 		`SELECT id, transfer_id, user_id, risk_score, risk_level, action, flags, reviewed_by, review_comment, created_at
 		 FROM fraud_checks WHERE transfer_id = $1`, transferID,
-	).Scan(&ch.ID, &ch.TransferID, &ch.UserID, &ch.RiskScore, &ch.RiskLevel, &ch.Action, &ch.Flags, &ch.ReviewedBy, &ch.ReviewComment, &ch.CreatedAt)
+	).Scan(&ch.ID, &ch.TransferID, &ch.UserID, &ch.RiskScore, &ch.RiskLevel, &ch.Action, &ch.Flags, &reviewedBy, &reviewComment, &ch.CreatedAt)
 	metrics.ObserveQuery("FraudRepo.GetByTransferID", start, err)
 	if err != nil {
 		return nil, domain.ErrFraudDetected
+	}
+	if reviewedBy != nil {
+		ch.ReviewedBy = *reviewedBy
+	}
+	if reviewComment != nil {
+		ch.ReviewComment = *reviewComment
 	}
 	return ch, nil
 }
@@ -64,9 +71,16 @@ func (r *WriteRepo) ListFlagged(ctx context.Context, limit, offset int) ([]*doma
 	var items []*domain.Check
 	for rows.Next() {
 		ch := &domain.Check{}
-		if err := rows.Scan(&ch.ID, &ch.TransferID, &ch.UserID, &ch.RiskScore, &ch.RiskLevel, &ch.Action, &ch.Flags, &ch.ReviewedBy, &ch.ReviewComment, &ch.CreatedAt); err != nil {
+		var reviewedBy, reviewComment *string
+		if err := rows.Scan(&ch.ID, &ch.TransferID, &ch.UserID, &ch.RiskScore, &ch.RiskLevel, &ch.Action, &ch.Flags, &reviewedBy, &reviewComment, &ch.CreatedAt); err != nil {
 			metrics.ObserveQuery("FraudRepo.ListFlagged", start, err)
 			return nil, fmt.Errorf("fraud_repo: list_flagged scan: %w", err)
+		}
+		if reviewedBy != nil {
+			ch.ReviewedBy = *reviewedBy
+		}
+		if reviewComment != nil {
+			ch.ReviewComment = *reviewComment
 		}
 		items = append(items, ch)
 	}
@@ -86,9 +100,13 @@ func (r *WriteRepo) CountFlagged(ctx context.Context) (int64, error) {
 func (r *WriteRepo) Update(ctx context.Context, ch *domain.Check) error {
 	start := time.Now()
 	db := sharedpg.ExtractDBTX(ctx, r.pool)
+	var reviewedBy interface{}
+	if ch.ReviewedBy != "" {
+		reviewedBy = ch.ReviewedBy
+	}
 	_, err := db.Exec(ctx,
 		`UPDATE fraud_checks SET reviewed_by = $1, review_comment = $2 WHERE id = $3`,
-		ch.ReviewedBy, ch.ReviewComment, ch.ID)
+		reviewedBy, ch.ReviewComment, ch.ID)
 	metrics.ObserveQuery("FraudRepo.Update", start, err)
 	return err
 }

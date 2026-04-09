@@ -34,28 +34,36 @@ func (r *WriteRepo) GetByID(ctx context.Context, id string) (*domain.Challenge, 
 	start := time.Now()
 	db := sharedpg.ExtractDBTX(ctx, r.pool)
 	c := &domain.Challenge{}
+	var token *string
 	err := db.QueryRow(ctx,
 		`SELECT id, user_id, method, status, token, action, metadata, expires_at, created_at, verified_at
 		 FROM challenges WHERE id = $1`, id,
-	).Scan(&c.ID, &c.UserID, &c.Method, &c.Status, &c.Token, &c.Action, &c.Metadata, &c.ExpiresAt, &c.CreatedAt, &c.VerifiedAt)
+	).Scan(&c.ID, &c.UserID, &c.Method, &c.Status, &token, &c.Action, &c.Metadata, &c.ExpiresAt, &c.CreatedAt, &c.VerifiedAt)
 	metrics.ObserveQuery("ChallengeRepo.GetByID", start, err)
 	if err != nil {
 		return nil, err
 	}
+	if token != nil {
+		c.Token = *token
+	}
 	return c, nil
 }
 
-func (r *WriteRepo) GetByToken(ctx context.Context, token string) (*domain.Challenge, error) {
+func (r *WriteRepo) GetByToken(ctx context.Context, tok string) (*domain.Challenge, error) {
 	start := time.Now()
 	db := sharedpg.ExtractDBTX(ctx, r.pool)
 	c := &domain.Challenge{}
+	var scannedToken *string
 	err := db.QueryRow(ctx,
 		`SELECT id, user_id, method, status, token, action, metadata, expires_at, created_at, verified_at
-		 FROM challenges WHERE token = $1`, token,
-	).Scan(&c.ID, &c.UserID, &c.Method, &c.Status, &c.Token, &c.Action, &c.Metadata, &c.ExpiresAt, &c.CreatedAt, &c.VerifiedAt)
+		 FROM challenges WHERE token = $1`, tok,
+	).Scan(&c.ID, &c.UserID, &c.Method, &c.Status, &scannedToken, &c.Action, &c.Metadata, &c.ExpiresAt, &c.CreatedAt, &c.VerifiedAt)
 	metrics.ObserveQuery("ChallengeRepo.GetByToken", start, err)
 	if err != nil {
 		return nil, err
+	}
+	if scannedToken != nil {
+		c.Token = *scannedToken
 	}
 	return c, nil
 }

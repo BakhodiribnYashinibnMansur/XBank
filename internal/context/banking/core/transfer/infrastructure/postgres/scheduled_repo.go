@@ -35,6 +35,7 @@ func (r *ScheduledRepo) GetByID(ctx context.Context, id string) (*transfer.Sched
 	start := time.Now()
 	st := &transfer.ScheduledTransfer{}
 	var currency string
+	var transferID *string
 
 	err := r.pool.QueryRow(ctx,
 		`SELECT id, user_id, from_account_id, to_account_id, amount, currency, description,
@@ -43,7 +44,7 @@ func (r *ScheduledRepo) GetByID(ctx context.Context, id string) (*transfer.Sched
 		id,
 	).Scan(&st.ID, &st.UserID, &st.FromAccountID, &st.ToAccountID,
 		&st.Amount.Amount, &currency, &st.Description,
-		&st.Status, &st.ExecuteAt, &st.TransferID, &st.FailureReason,
+		&st.Status, &st.ExecuteAt, &transferID, &st.FailureReason,
 		&st.CreatedAt, &st.ExecutedAt)
 
 	metrics.ObserveQuery("ScheduledTransferRepo.GetByID", start, err)
@@ -51,6 +52,9 @@ func (r *ScheduledRepo) GetByID(ctx context.Context, id string) (*transfer.Sched
 		return nil, err
 	}
 	st.Amount.Currency = domain.Currency(currency)
+	if transferID != nil {
+		st.TransferID = *transferID
+	}
 	return st, nil
 }
 
@@ -83,13 +87,17 @@ func (r *ScheduledRepo) ListByUserID(ctx context.Context, userID string, limit, 
 	for rows.Next() {
 		st := &transfer.ScheduledTransfer{}
 		var currency string
+		var transferID *string
 		if err := rows.Scan(&st.ID, &st.UserID, &st.FromAccountID, &st.ToAccountID,
 			&st.Amount.Amount, &currency, &st.Description,
-			&st.Status, &st.ExecuteAt, &st.TransferID, &st.FailureReason,
+			&st.Status, &st.ExecuteAt, &transferID, &st.FailureReason,
 			&st.CreatedAt, &st.ExecutedAt); err != nil {
 			return nil, 0, err
 		}
 		st.Amount.Currency = domain.Currency(currency)
+		if transferID != nil {
+			st.TransferID = *transferID
+		}
 		results = append(results, st)
 	}
 
@@ -99,11 +107,15 @@ func (r *ScheduledRepo) ListByUserID(ctx context.Context, userID string, limit, 
 
 func (r *ScheduledRepo) Update(ctx context.Context, st *transfer.ScheduledTransfer) error {
 	start := time.Now()
+	var transferID interface{}
+	if st.TransferID != "" {
+		transferID = st.TransferID
+	}
 	_, err := r.pool.Exec(ctx,
 		`UPDATE scheduled_transfers
 		 SET status = $1, transfer_id = $2, failure_reason = $3, executed_at = $4
 		 WHERE id = $5`,
-		st.Status, st.TransferID, st.FailureReason, st.ExecutedAt, st.ID,
+		st.Status, transferID, st.FailureReason, st.ExecutedAt, st.ID,
 	)
 	metrics.ObserveQuery("ScheduledTransferRepo.Update", start, err)
 	return err
@@ -133,13 +145,17 @@ func (r *ScheduledRepo) FetchDue(ctx context.Context, limit int) ([]*transfer.Sc
 	for rows.Next() {
 		st := &transfer.ScheduledTransfer{}
 		var currency string
+		var transferID *string
 		if err := rows.Scan(&st.ID, &st.UserID, &st.FromAccountID, &st.ToAccountID,
 			&st.Amount.Amount, &currency, &st.Description,
-			&st.Status, &st.ExecuteAt, &st.TransferID, &st.FailureReason,
+			&st.Status, &st.ExecuteAt, &transferID, &st.FailureReason,
 			&st.CreatedAt, &st.ExecutedAt); err != nil {
 			return nil, err
 		}
 		st.Amount.Currency = domain.Currency(currency)
+		if transferID != nil {
+			st.TransferID = *transferID
+		}
 		results = append(results, st)
 	}
 
