@@ -28,12 +28,12 @@
 ## Database
 - [PostgreSQL](database/postgresql.md) — Schema, RLS, partitioning, pg_cron, backup
 - [Transaction Layer](database/transactions.md) — ACID, isolation levels, locking, retry
-<!-- TODO: database/migrations.md — List of all migrations (not yet created) -->
+- [Migrations](database/migrations.md) — All 36 migrations, tables, conventions
 
 ## Security
 - [Security Overview](security/overview.md) — OWASP, encryption, hashing, rate limiting
 - [Encryption & PKI](security/encryption.md) — E2EE (ECIES), ES256, Envelope encryption, key rotation, Vault
-<!-- TODO: security/api-standards.md — Response format, pagination, Swagger (not yet created) -->
+- [API Standards](security/api-standards.md) — Response format, pagination, error codes, auth
 - [International Standards](security/compliance.md) — PCI DSS, ISO 27001, SOC 2, GDPR
 
 ## Testing
