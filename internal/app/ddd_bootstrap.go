@@ -1,12 +1,14 @@
 package app
 
 import (
+	"github.com/BakhodiribnYashinibnMansur/XBank/internal/context/admin/core/dashboard"
 	"github.com/BakhodiribnYashinibnMansur/XBank/internal/context/admin/generic/featureflag"
 	"github.com/BakhodiribnYashinibnMansur/XBank/internal/context/admin/supporting/dataexport"
 	"github.com/BakhodiribnYashinibnMansur/XBank/internal/context/admin/supporting/integration"
 	"github.com/BakhodiribnYashinibnMansur/XBank/internal/context/admin/supporting/sitesetting"
 	"github.com/BakhodiribnYashinibnMansur/XBank/internal/context/admin/supporting/statistics"
 	"github.com/BakhodiribnYashinibnMansur/XBank/internal/context/banking/core/account"
+	"github.com/BakhodiribnYashinibnMansur/XBank/internal/context/banking/generic/currency"
 	"github.com/BakhodiribnYashinibnMansur/XBank/internal/context/banking/core/card"
 	"github.com/BakhodiribnYashinibnMansur/XBank/internal/context/banking/core/ledger"
 	"github.com/BakhodiribnYashinibnMansur/XBank/internal/context/banking/core/transfer"
@@ -15,6 +17,7 @@ import (
 	"github.com/BakhodiribnYashinibnMansur/XBank/internal/context/banking/supporting/fraud"
 	"github.com/BakhodiribnYashinibnMansur/XBank/internal/context/banking/supporting/kyc"
 	"github.com/BakhodiribnYashinibnMansur/XBank/internal/context/banking/supporting/reconciliation"
+	"github.com/BakhodiribnYashinibnMansur/XBank/internal/context/content/core/template"
 	"github.com/BakhodiribnYashinibnMansur/XBank/internal/context/content/generic/file"
 	"github.com/BakhodiribnYashinibnMansur/XBank/internal/context/content/generic/notification"
 	"github.com/BakhodiribnYashinibnMansur/XBank/internal/context/content/generic/translation"
@@ -27,6 +30,7 @@ import (
 	"github.com/BakhodiribnYashinibnMansur/XBank/internal/context/iam/supporting/audit"
 	"github.com/BakhodiribnYashinibnMansur/XBank/internal/context/iam/supporting/contact"
 	"github.com/BakhodiribnYashinibnMansur/XBank/internal/context/iam/supporting/device"
+	"github.com/BakhodiribnYashinibnMansur/XBank/internal/context/ops/core/healthcheck"
 	"github.com/BakhodiribnYashinibnMansur/XBank/internal/context/ops/generic/metric"
 	"github.com/BakhodiribnYashinibnMansur/XBank/internal/context/ops/generic/ratelimit"
 	"github.com/BakhodiribnYashinibnMansur/XBank/internal/context/ops/generic/systemerror"
@@ -43,11 +47,17 @@ import (
 
 // DDDBoundedContexts holds all Bounded Context instances.
 type DDDBoundedContexts struct {
+	// Admin — Core
+	Dashboard *dashboard.BoundedContext
+
 	// Banking — Core
 	Account  *account.BoundedContext
 	Card     *card.BoundedContext
 	Transfer *transfer.BoundedContext
 	Ledger   *ledger.BoundedContext
+
+	// Banking — Generic
+	Currency *currency.BoundedContext
 
 	// Banking — Supporting
 	Beneficiary    *beneficiary.BoundedContext
@@ -81,6 +91,9 @@ type DDDBoundedContexts struct {
 	Integration *integration.BoundedContext
 	DataExport  *dataexport.BoundedContext
 
+	// Content — Core
+	Template *template.BoundedContext
+
 	// Content — Generic
 	File         *file.BoundedContext
 	Notification *notification.BoundedContext
@@ -88,6 +101,9 @@ type DDDBoundedContexts struct {
 
 	// Content — Supporting
 	Announcement *announcement.BoundedContext
+
+	// Ops — Core
+	Healthcheck *healthcheck.BoundedContext
 
 	// Ops — Generic
 	SystemError *systemerror.BoundedContext
@@ -133,6 +149,9 @@ func NewDDDBoundedContexts(
 	auditBC := audit.NewBoundedContext(pool)
 	deviceBC := device.NewBoundedContext(pool)
 
+	// Banking — Generic
+	currencyBC := currency.NewBoundedContext(pool)
+
 	// Banking — Core
 	ledgerBC := ledger.NewBoundedContext(pool)
 	accountBC := account.NewBoundedContext(pool, txManager, publisher, cfg.Kafka.Topics, auditLog)
@@ -146,18 +165,27 @@ func NewDDDBoundedContexts(
 	fraudBC := fraud.NewBoundedContext(pool)
 	reconBC := reconciliation.NewBoundedContext(accountBC.Reader, ledgerBC.Reader)
 
-	// Admin
+	// Admin — Core
+	dashboardBC := dashboard.NewBoundedContext(pool)
+
+	// Admin — Generic/Supporting
 	featureFlagBC := featureflag.NewBoundedContext(pool, eventBus)
 	siteSettingBC := sitesetting.NewBoundedContext(pool, eventBus)
 	statisticsBC := statistics.NewBoundedContext(pool)
 
-	// Content
+	// Content — Core
+	templateBC := template.NewBoundedContext(pool)
+
+	// Content — Generic
 	fileBC := file.NewBoundedContext(pool)
 	notificationBC := notification.NewBoundedContext(pool, eventBus)
 	translationBC := translation.NewBoundedContext(pool, eventBus)
 	announcementBC := announcement.NewBoundedContext(pool, eventBus)
 
-	// Ops
+	// Ops — Core
+	healthcheckBC := healthcheck.NewBoundedContext(pool)
+
+	// Ops — Generic
 	systemErrorBC := systemerror.NewBoundedContext(pool, eventBus)
 	rateLimitBC := ratelimit.NewBoundedContext(pool)
 	metricBC := metric.NewBoundedContext(pool)
@@ -169,10 +197,12 @@ func NewDDDBoundedContexts(
 	dataExportBC := dataexport.NewBoundedContext(pool)
 
 	return &DDDBoundedContexts{
+		Dashboard:      dashboardBC,
 		Account:        accountBC,
 		Card:           cardBC,
 		Transfer:       transferBC,
 		Ledger:         ledgerBC,
+		Currency:       currencyBC,
 		Beneficiary:    beneficiaryBC,
 		Exchange:       exchangeBC,
 		KYC:            kycBC,
@@ -189,10 +219,12 @@ func NewDDDBoundedContexts(
 		FeatureFlag:    featureFlagBC,
 		SiteSetting:    siteSettingBC,
 		Statistics:     statisticsBC,
+		Template:       templateBC,
 		File:           fileBC,
 		Notification:   notificationBC,
 		Translation:    translationBC,
 		Announcement:   announcementBC,
+		Healthcheck:    healthcheckBC,
 		SystemError:    systemErrorBC,
 		RateLimit:      rateLimitBC,
 		Metric:         metricBC,

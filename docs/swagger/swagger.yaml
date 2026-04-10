@@ -1285,6 +1285,222 @@ components:
           type: string
           format: date-time
 
+    # ── Admin — Dashboard ───────────────────────────────────────
+    DashboardOverviewResponse:
+      type: object
+      properties:
+        total_users:
+          type: integer
+          format: int64
+        active_users:
+          type: integer
+          format: int64
+        total_accounts:
+          type: integer
+          format: int64
+        total_transfers:
+          type: integer
+          format: int64
+        total_deposits:
+          type: integer
+          format: int64
+        total_withdrawals:
+          type: integer
+          format: int64
+        generated_at:
+          type: string
+          format: date-time
+
+    DashboardPeriodStatsResponse:
+      type: object
+      properties:
+        period:
+          type: string
+          description: "daily, weekly, monthly"
+        start_date:
+          type: string
+          format: date-time
+        end_date:
+          type: string
+          format: date-time
+        new_users:
+          type: integer
+          format: int64
+        new_accounts:
+          type: integer
+          format: int64
+        transactions:
+          type: integer
+          format: int64
+        volume:
+          type: integer
+          format: int64
+
+    # ── Admin — Currency ────────────────────────────────────────
+    CreateCurrencyRequest:
+      type: object
+      required: [code, name, symbol, decimal_places]
+      properties:
+        code:
+          type: string
+        name:
+          type: string
+        symbol:
+          type: string
+        decimal_places:
+          type: integer
+
+    UpdateCurrencyRequest:
+      type: object
+      required: [id, name, symbol, decimal_places]
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        symbol:
+          type: string
+        decimal_places:
+          type: integer
+
+    ToggleCurrencyStatusRequest:
+      type: object
+      required: [id, active]
+      properties:
+        id:
+          type: string
+        active:
+          type: boolean
+
+    CurrencyResponse:
+      type: object
+      properties:
+        id:
+          type: string
+        code:
+          type: string
+        name:
+          type: string
+        symbol:
+          type: string
+        decimal_places:
+          type: integer
+        status:
+          type: string
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+
+    # ── Admin — Template ────────────────────────────────────────
+    CreateTemplateRequest:
+      type: object
+      required: [slug, channel, subject, body, locale]
+      properties:
+        slug:
+          type: string
+        channel:
+          type: string
+          description: "EMAIL, SMS, PUSH"
+        subject:
+          type: string
+        body:
+          type: string
+        locale:
+          type: string
+          description: "uz, ru, en"
+
+    UpdateTemplateBodyRequest:
+      type: object
+      required: [id, subject, body]
+      properties:
+        id:
+          type: string
+        subject:
+          type: string
+        body:
+          type: string
+
+    TemplateIDRequest:
+      type: object
+      required: [id]
+      properties:
+        id:
+          type: string
+
+    TemplateResponse:
+      type: object
+      properties:
+        id:
+          type: string
+        slug:
+          type: string
+        channel:
+          type: string
+        subject:
+          type: string
+        body:
+          type: string
+        locale:
+          type: string
+        status:
+          type: string
+        version:
+          type: integer
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+
+    # ── Admin — Healthcheck ─────────────────────────────────────
+    ComponentCheckResponse:
+      type: object
+      properties:
+        name:
+          type: string
+        status:
+          type: string
+        latency_ms:
+          type: integer
+          format: int64
+        message:
+          type: string
+        checked_at:
+          type: string
+          format: date-time
+
+    SystemHealthResponse:
+      type: object
+      properties:
+        status:
+          type: string
+        components:
+          type: array
+          items:
+            $ref: '#/components/schemas/ComponentCheckResponse'
+        checked_at:
+          type: string
+          format: date-time
+
+    HealthRecordResponse:
+      type: object
+      properties:
+        id:
+          type: string
+        status:
+          type: string
+        components:
+          type: array
+          items:
+            $ref: '#/components/schemas/ComponentCheckResponse'
+        checked_at:
+          type: string
+          format: date-time
+
     # ── Ops — IP Rule ───────────────────────────────────────────
     CreateIPRuleRequest:
       type: object
@@ -5499,6 +5715,673 @@ paths:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
 
+  # ════════════════════════════════════════════════════════════════
+  #  ADMIN — DASHBOARD
+  # ════════════════════════════════════════════════════════════════
+  /admin/dashboard/overview:
+    get:
+      tags: [Admin - Dashboard]
+      summary: Dashboard overview
+      description: Returns aggregated overview metrics for the admin dashboard
+      security:
+        - BearerAuth: []
+      responses:
+        "200":
+          description: Overview metrics
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DashboardOverviewResponse'
+        "401":
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        "403":
+          description: Admin role required
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /admin/dashboard/period:
+    get:
+      tags: [Admin - Dashboard]
+      summary: Period-based statistics
+      description: Returns statistics for a given period (daily, weekly, monthly)
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: period
+          in: query
+          required: true
+          schema:
+            type: string
+            enum: [daily, weekly, monthly]
+        - name: start
+          in: query
+          required: true
+          schema:
+            type: string
+            format: date-time
+        - name: end
+          in: query
+          required: true
+          schema:
+            type: string
+            format: date-time
+      responses:
+        "200":
+          description: Period statistics
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DashboardPeriodStatsResponse'
+        "400":
+          description: Invalid parameters
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        "401":
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        "403":
+          description: Admin role required
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  # ════════════════════════════════════════════════════════════════
+  #  ADMIN — CURRENCIES
+  # ════════════════════════════════════════════════════════════════
+  /admin/currencies/create:
+    post:
+      tags: [Admin - Currencies]
+      summary: Create a currency
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateCurrencyRequest'
+      responses:
+        "201":
+          description: Currency created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CurrencyResponse'
+        "400":
+          description: Validation error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        "401":
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        "403":
+          description: Admin role required
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /admin/currencies/get:
+    get:
+      tags: [Admin - Currencies]
+      summary: Get currency by code
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: code
+          in: query
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Currency details
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CurrencyResponse'
+        "404":
+          description: Currency not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        "401":
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        "403":
+          description: Admin role required
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /admin/currencies/list:
+    get:
+      tags: [Admin - Currencies]
+      summary: List all currencies
+      security:
+        - BearerAuth: []
+      responses:
+        "200":
+          description: Currency list
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/CurrencyResponse'
+        "401":
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        "403":
+          description: Admin role required
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /admin/currencies/update:
+    put:
+      tags: [Admin - Currencies]
+      summary: Update a currency
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateCurrencyRequest'
+      responses:
+        "200":
+          description: Currency updated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CurrencyResponse'
+        "400":
+          description: Validation error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        "404":
+          description: Currency not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        "401":
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        "403":
+          description: Admin role required
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /admin/currencies/toggle-status:
+    post:
+      tags: [Admin - Currencies]
+      summary: Toggle currency active status
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ToggleCurrencyStatusRequest'
+      responses:
+        "200":
+          description: Currency status toggled
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CurrencyResponse'
+        "404":
+          description: Currency not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        "401":
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        "403":
+          description: Admin role required
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  # ════════════════════════════════════════════════════════════════
+  #  ADMIN — TEMPLATES
+  # ════════════════════════════════════════════════════════════════
+  /admin/templates/create:
+    post:
+      tags: [Admin - Templates]
+      summary: Create a notification template
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateTemplateRequest'
+      responses:
+        "201":
+          description: Template created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TemplateResponse'
+        "400":
+          description: Validation error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        "401":
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        "403":
+          description: Admin role required
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /admin/templates/get:
+    get:
+      tags: [Admin - Templates]
+      summary: Get template by ID
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: id
+          in: query
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Template details
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TemplateResponse'
+        "404":
+          description: Template not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        "401":
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        "403":
+          description: Admin role required
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /admin/templates/resolve:
+    get:
+      tags: [Admin - Templates]
+      summary: Resolve template by slug and locale
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: slug
+          in: query
+          required: true
+          schema:
+            type: string
+        - name: locale
+          in: query
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Resolved template
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TemplateResponse'
+        "404":
+          description: Template not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        "401":
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        "403":
+          description: Admin role required
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /admin/templates/list:
+    get:
+      tags: [Admin - Templates]
+      summary: List templates with pagination
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: channel
+          in: query
+          required: false
+          schema:
+            type: string
+            enum: [EMAIL, SMS, PUSH]
+        - name: page
+          in: query
+          required: false
+          schema:
+            type: integer
+            default: 1
+        - name: limit
+          in: query
+          required: false
+          schema:
+            type: integer
+            default: 20
+      responses:
+        "200":
+          description: Paginated template list
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/PaginatedResponse'
+                  - type: object
+                    properties:
+                      data:
+                        type: array
+                        items:
+                          $ref: '#/components/schemas/TemplateResponse'
+        "401":
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        "403":
+          description: Admin role required
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /admin/templates/update-body:
+    put:
+      tags: [Admin - Templates]
+      summary: Update template subject and body
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateTemplateBodyRequest'
+      responses:
+        "200":
+          description: Template updated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TemplateResponse'
+        "400":
+          description: Validation error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        "404":
+          description: Template not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        "401":
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        "403":
+          description: Admin role required
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /admin/templates/activate:
+    post:
+      tags: [Admin - Templates]
+      summary: Activate a template
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TemplateIDRequest'
+      responses:
+        "200":
+          description: Template activated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TemplateResponse'
+        "404":
+          description: Template not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        "401":
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        "403":
+          description: Admin role required
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /admin/templates/archive:
+    post:
+      tags: [Admin - Templates]
+      summary: Archive a template
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TemplateIDRequest'
+      responses:
+        "200":
+          description: Template archived
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TemplateResponse'
+        "404":
+          description: Template not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        "401":
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        "403":
+          description: Admin role required
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  # ════════════════════════════════════════════════════════════════
+  #  ADMIN — HEALTHCHECK
+  # ════════════════════════════════════════════════════════════════
+  /admin/health/check:
+    post:
+      tags: [Admin - Healthcheck]
+      summary: Run a system health check
+      description: Triggers a full system health check across all components
+      security:
+        - BearerAuth: []
+      responses:
+        "200":
+          description: Health check result
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SystemHealthResponse'
+        "401":
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        "403":
+          description: Admin role required
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /admin/health/latest:
+    get:
+      tags: [Admin - Healthcheck]
+      summary: Get latest health check record
+      security:
+        - BearerAuth: []
+      responses:
+        "200":
+          description: Latest health check record
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HealthRecordResponse'
+        "401":
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        "403":
+          description: Admin role required
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /admin/health/history:
+    get:
+      tags: [Admin - Healthcheck]
+      summary: Health check history with pagination
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: page
+          in: query
+          required: false
+          schema:
+            type: integer
+            default: 1
+        - name: limit
+          in: query
+          required: false
+          schema:
+            type: integer
+            default: 20
+      responses:
+        "200":
+          description: Paginated health check history
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/PaginatedResponse'
+                  - type: object
+                    properties:
+                      data:
+                        type: array
+                        items:
+                          $ref: '#/components/schemas/HealthRecordResponse'
+        "401":
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        "403":
+          description: Admin role required
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
 tags:
   - name: Health
     description: Infrastructure health checks
@@ -5570,3 +6453,11 @@ tags:
     description: Application metric queries
   - name: Admin - IP Rules
     description: IP allow/deny rule management
+  - name: Admin - Dashboard
+    description: Admin dashboard overview and period statistics
+  - name: Admin - Currencies
+    description: Currency CRUD and status management
+  - name: Admin - Templates
+    description: Notification template management
+  - name: Admin - Healthcheck
+    description: System health check and history
